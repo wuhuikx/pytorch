@@ -290,7 +290,10 @@ def _load(f, map_location, pickle_module):
             return result
 
     def _check_container_source(container_type, source_file, original_source):
-        current_source = inspect.getsource(container_type)
+        try:
+            current_source = inspect.getsource(container_type)
+        except OSError:
+            return
         if original_source != current_source:
             if container_type.dump_patches:
                 file_name = container_type.__name__ + '.patch'
