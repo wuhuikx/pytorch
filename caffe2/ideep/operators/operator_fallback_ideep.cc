@@ -98,4 +98,23 @@ REGISTER_IDEEP_OPERATOR(
       IDEEPFallbackOp<UnaryElementwiseOp<
       TensorTypes<float>, CPUContext, SigmoidCPUFunctor>>);
 
+// gradient ops
+REGISTER_IDEEP_OPERATOR(
+      AveragedLossGradient,
+      IDEEPFallbackOp<AveragedLossGradient<float, CPUContext>>);
+REGISTER_IDEEP_OPERATOR(
+      LabelCrossEntropyGradient,
+      IDEEPFallbackOp<LabelCrossEntropyGradientOp<float, CPUContext>>);
+REGISTER_IDEEP_OPERATOR(
+      SoftmaxGradient,
+      IDEEPFallbackOp<SoftmaxGradientOp<float, CPUContext>>);
+REGISTER_IDEEP_OPERATOR(
+      Iter,
+      IDEEPFallbackOp<IterOp<CPUContext>>);
+REGISTER_IDEEP_OPERATOR(
+      LearningRate,
+      IDEEPFallbackOp<LearningRateOp<float, CPUContext>>);
+REGISTER_IDEEP_OPERATOR(
+      WeightedSum,
+      IDEEPFallbackOp<WeightedSumOp<CPUContext>>);
 } // namespace caffe2

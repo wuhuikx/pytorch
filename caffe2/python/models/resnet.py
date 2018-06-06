@@ -39,6 +39,7 @@ class ResNetBuilder():
             stride=stride,
             pad=pad,
             no_bias=self.no_bias,
+            training_mode=1,
         )
         return self.prev_blob
 
@@ -122,6 +123,7 @@ class ResNetBuilder():
                 kernel=1,
                 stride=(1 if down_sampling is False else 2),
                 no_bias=self.no_bias,
+                training_mode=1,
             )
             if spatial_batch_norm:
                 shortcut_blob = brew.spatial_bn(
@@ -183,6 +185,7 @@ class ResNetBuilder():
                 kernel=1,
                 stride=(1 if down_sampling is False else 2),
                 no_bias=self.no_bias,
+                training_mode=1,
             )
             if spatial_batch_norm:
                 shortcut_blob = brew.spatial_bn(
@@ -231,7 +234,8 @@ def create_resnet50(
         kernel=conv1_kernel,
         stride=conv1_stride,
         pad=3,
-        no_bias=no_bias
+        no_bias=no_bias,
+        training_mode=1,
     )
 
     brew.spatial_bn(
