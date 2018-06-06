@@ -2,6 +2,12 @@
 #include "caffe2/utils/cpu_neon.h"
 #include "caffe2/utils/math.h"
 
+#ifdef CAFFE2_USE_IDEEP
+#include <caffe2/ideep/operators/operator_fallback_ideep.h>
+#include <caffe2/ideep/utils/ideep_operator.h>
+#endif
+
+
 namespace caffe2 {
 
 #if defined(__ARM_NEON__) || defined(__ARM_NEON)
@@ -567,6 +573,15 @@ class BRGNCHWCToPackedInt8BGRAStylizerDeprocessOp
 };
 
 namespace {
+
+#ifdef CAFFE2_USE_IDEEP
+REGISTER_IDEEP_OPERATOR(
+      BRGNCHWCToPackedInt8BGRAStylizerDeprocess,
+      IDEEPFallbackOp<BRGNCHWCToPackedInt8BGRAStylizerDeprocessOp, SkipIndices<0>>);
+REGISTER_IDEEP_OPERATOR(
+      PackedInt8BGRANHWCToNCHWCStylizerPreprocess,
+      IDEEPFallbackOp<PackedInt8BGRANHWCToNCHWCStylizerPreprocessOp>); // , SkipIndices<0>>);
+#endif
 
 REGISTER_CPU_OPERATOR(
     PackedInt8BGRANHWCToNCHWCStylizerPreprocess,
