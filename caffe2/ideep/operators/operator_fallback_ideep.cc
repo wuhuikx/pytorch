@@ -13,6 +13,16 @@
 #include <caffe2/operators/softmax_op.h>
 #include <caffe2/operators/transpose_op.h>
 #include <caffe2/operators/utility_ops.h>
+#include <caffe2/sgd/learning_rate_op.h>
+#include <caffe2/sgd/iter_op.h>
+#include <caffe2/operators/bbox_transform_op.h>
+#include <caffe2/operators/box_with_nms_limit_op.h>
+#include <caffe2/operators/generate_proposals_op.h>
+#include <caffe2/operators/roi_align_op.h>
+#include <caffe2/operators/pad_op.h>
+#include <caffe2/operators/prelu_op.h>
+#include <caffe2/operators/elementwise_op.h>
+#include <caffe2/operators/given_tensor_fill_op.h>
 
 // can add more non-IDEEP operators if needed
 namespace caffe2 {
@@ -53,5 +63,39 @@ REGISTER_IDEEP_OPERATOR(
 REGISTER_IDEEP_OPERATOR(
     GivenTensorFill,
     IDEEPFallbackOp<GivenTensorFillOp<float, CPUContext>>);
+
+// for fasterrcnn 
+REGISTER_IDEEP_OPERATOR(
+      BBoxTransform,
+      IDEEPFallbackOp<BBoxTransformOp<float, CPUContext>>);
+REGISTER_IDEEP_OPERATOR(
+      BoxWithNMSLimit,
+      IDEEPFallbackOp<BoxWithNMSLimitOp<CPUContext>, SkipIndices<0,1,2>>);
+REGISTER_IDEEP_OPERATOR(
+      GenerateProposals,
+      IDEEPFallbackOp<GenerateProposalsOp<CPUContext>>);
+REGISTER_IDEEP_OPERATOR(
+      RoIAlign,
+      IDEEPFallbackOp<RoIAlignOp<float, CPUContext>>);
+REGISTER_IDEEP_OPERATOR(
+      PadImage,
+      IDEEPFallbackOp<PadImageOp<float, CPUContext>>);
+REGISTER_IDEEP_OPERATOR(
+      PRelu,
+      IDEEPFallbackOp<PReluOp<float, CPUContext>>);
+
+struct SigmoidCPUFunctor {
+    template <typename T>
+    inline void
+    operator()(const int n, const T* x, T* y, CPUContext* /*device_context*/) {
+       ConstEigenVectorArrayMap<T> xM(x, n);
+       EigenVectorArrayMap<T>(y, n) = 1. / (1. + (-xM).exp());
+    }
+};
+
+REGISTER_IDEEP_OPERATOR(
+      Sigmoid,
+      IDEEPFallbackOp<UnaryElementwiseOp<
+      TensorTypes<float>, CPUContext, SigmoidCPUFunctor>>);
 
 } // namespace caffe2
