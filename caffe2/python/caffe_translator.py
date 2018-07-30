@@ -716,14 +716,25 @@ def TranslateBatchNorm(layer, pretrained_blobs, is_test, **kwargs):
             output + '_var')
     else:
         raise RuntimeError("scalar is zero.")
-    pretrained_blobs[2][0] = 1
-    pretrained_blobs[2] = np.tile(pretrained_blobs[2], (n_channels, ))
-    scale = utils.NumpyArrayToCaffe2Tensor(
-        pretrained_blobs[2],
-        output + '_scale')
-    bias = utils.NumpyArrayToCaffe2Tensor(
-        np.zeros_like(pretrained_blobs[2]),
-        output + '_bias')
+    if len(pretrained_blobs) > 3:
+        # IntelCaffe and NVCaffe uses fused BN+Scale,
+        # three blobs for BN and two blobs for Scale,
+        # so that the total number of blobs becomes five (including scale and bias).
+        scale = utils.NumpyArrayToCaffe2Tensor(
+            pretrained_blobs[3].flatten(),
+            output + '_scale')
+        bias = utils.NumpyArrayToCaffe2Tensor(
+            pretrained_blobs[4].flatten(),
+            output + '_bias')
+    else:
+        pretrained_blobs[2][0] = 1
+        pretrained_blobs[2] = np.tile(pretrained_blobs[2], (n_channels, ))
+        scale = utils.NumpyArrayToCaffe2Tensor(
+            pretrained_blobs[2],
+            output + '_scale')
+        bias = utils.NumpyArrayToCaffe2Tensor(
+            np.zeros_like(pretrained_blobs[2]),
+            output + '_bias')
 
     return caffe_op, [scale, bias, mean, var]
 
