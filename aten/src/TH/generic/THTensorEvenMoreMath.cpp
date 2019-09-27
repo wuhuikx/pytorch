@@ -381,6 +381,8 @@ scalar_t THTensor_(maxall)(THTensor *tensor)
   return theMax;
 }
 
+#endif
+
 void THTensor_(indexSelect)(THTensor *tensor, THTensor *src, int dim, THLongTensor *index)
 {
   ptrdiff_t i, numel;
@@ -465,6 +467,8 @@ void THTensor_(indexSelect)(THTensor *tensor, THTensor *src, int dim, THLongTens
 
   THLongTensor_free(index);
 }
+
+#if !defined(TH_REAL_IS_BFLOAT16) /* non bfloat16 part*/
 
 void THTensor_(indexCopy)(THTensor *tensor, int dim, THLongTensor *index, THTensor *src)
 {
