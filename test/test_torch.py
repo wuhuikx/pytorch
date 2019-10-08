@@ -64,6 +64,7 @@ with warnings.catch_warnings(record=True) as warns:
                 can_retrieve_source = False
                 break
 
+bf16_math_functions = [torch.tanh]
 
 class FilelikeMock(object):
     def __init__(self, data, has_fileno=True, has_readinto=False):
@@ -299,9 +300,14 @@ class _TestTorchMixin(object):
         # compare against the reference math function
         compare_reference(input, torch.double)
         compare_reference(input, torch.float)
+        if torchfn in bf16_math_functions:
+            compare_reference(input, torch.bfloat16)
 
         def check_non_contiguous(shape, dtype):
-            contig = torch.randn(shape, dtype=dtype)
+            if dtype is torch.bfloat16:
+                contig = torch.randn(shape).bfloat16()
+            else:
+                contig = torch.randn(shape, dtype=dtype)
             non_contig = torch.empty(shape + (2,), dtype=dtype)[..., 0]
             non_contig.copy_(contig)
             self.assertFalse(non_contig.is_contiguous())
@@ -312,9 +318,15 @@ class _TestTorchMixin(object):
         check_non_contiguous((1024,), torch.double)
         check_non_contiguous((5, 7), torch.float)
         check_non_contiguous((1024,), torch.float)
+        if torchfn in bf16_math_functions:
+            check_non_contiguous((5, 7), torch.bfloat16)
+            check_non_contiguous((1024,), torch.bfloat16)
 
         def check_non_contiguous_index(dtype):
-            contig = torch.randn((2, 2, 1, 2), dtype=dtype)
+            if dtype is torch.bfloat16:
+                contig = torch.randn((2, 2, 1, 2)).bfloat16()
+            else:
+                contig = torch.randn((2, 2, 1, 2), dtype=dtype)
             non_contig = contig[:, 1, ...]
             contig = non_contig.clone()
             self.assertFalse(non_contig.is_contiguous())
@@ -322,9 +334,14 @@ class _TestTorchMixin(object):
 
         check_non_contiguous_index(torch.float)
         check_non_contiguous_index(torch.double)
+        if torchfn in bf16_math_functions:
+            check_non_contiguous_index(torch.bfloat16)
 
         def check_non_contiguous_expand(shape, dtype):
-            contig = torch.randn(shape, dtype=dtype)
+            if dtype is torch.bfloat16:
+                contig = torch.randn(shape).bfloat16()
+            else:
+                contig = torch.randn(shape, dtype=dtype)
             non_contig = contig.clone().expand(3, -1, -1)
             self.assertFalse(non_contig.is_contiguous())
             contig = torchfn(contig)
@@ -338,11 +355,16 @@ class _TestTorchMixin(object):
             check_non_contiguous_expand((1, 3), torch.double)
             check_non_contiguous_expand((1, 7), torch.double)
             check_non_contiguous_expand((5, 7), torch.float)
+            if torchfn in bf16_math_functions:
+                check_non_contiguous_expand((5, 7), torch.bfloat16)
 
         # If size(dim) == 1, stride(dim) is not defined.
         # The code needs to be able to handle this
         def check_contiguous_size1(dtype):
-            contig = torch.randn((5, 100), dtype=dtype)
+            if dtype is torch.bfloat16:
+                contig = torch.randn((5, 100)).bfloat16()
+            else:
+                contig = torch.randn((5, 100), dtype=dtype)
             contig = contig[:1, :50]
             contig2 = torch.empty(contig.size(), dtype=dtype)
             contig2.copy_(contig)
@@ -352,9 +374,14 @@ class _TestTorchMixin(object):
 
         check_contiguous_size1(torch.double)
         check_contiguous_size1(torch.float)
+        if torchfn in bf16_math_functions:
+            check_contiguous_size1(torch.bfloat16)
 
         def check_contiguous_size1_largedim(dtype):
-            contig = torch.randn((5, 2, 3, 1, 4, 5, 3, 2, 1, 2, 3, 4), dtype=dtype)
+            if dtype is torch.bfloat16:
+                contig = torch.randn((5, 2, 3, 1, 4, 5, 3, 2, 1, 2, 3, 4)).bfloat16()
+            else:
+                contig = torch.randn((5, 2, 3, 1, 4, 5, 3, 2, 1, 2, 3, 4), dtype=dtype)
             contig = contig[:1, :, :, :, :, :, :, :, :, :, :, :]
             contig2 = torch.empty(contig.size(), dtype=dtype)
             contig2.copy_(contig)
@@ -364,9 +391,14 @@ class _TestTorchMixin(object):
 
         check_contiguous_size1_largedim(torch.double)
         check_contiguous_size1_largedim(torch.float)
+        if torchfn in bf16_math_functions:
+            check_contiguous_size1_largedim(torch.bfloat16)
 
         def check_large(dtype):
-            input = torch.randn(1024, 512, dtype=dtype)
+            if dtype is torch.bfloat16:
+                input = torch.randn(1024, 512).bfloat16()
+            else:
+                input = torch.randn(1024, 512, dtype=dtype)
             actual = torchfn(input)
             expected = torch.stack([torchfn(slice) for slice in input])
             self.assertEqual(actual, expected, 'large')
@@ -375,6 +407,8 @@ class _TestTorchMixin(object):
         # possible parallelism bugs.
         check_large(torch.double)
         check_large(torch.float)
+        if torchfn in bf16_math_functions:
+            check_large(torch.bfloat16)
 
     def __test_math_by_name(self, function_name, mathfn, selffn):
         mathfn = getattr(math, mathfn)
@@ -11286,6 +11320,7 @@ class TestTorchDeviceType(TestCase):
     def test_unary_out_op_mem_overlap(self, device, dtype):
         sz = 3
         doubles = torch.randn(2 * sz, dtype=dtype, device=device)
+        bfloat16s = doubles.bfloat16()
         positives = torch.randint(1, 100, (2 * sz,), device=device).double()
         ints = torch.randint(-100, 100, (2 * sz,), device=device)
         unary_mem_overlap_cases = [
@@ -11342,11 +11377,13 @@ class TestTorchDeviceType(TestCase):
             ("sinh", doubles, False, True, 'cuda'),
             ("sigmoid", doubles, True, True, 'cpu'),
             ("sigmoid", doubles, True, True, 'cuda'),
+            ("sigmoid", bfloat16s, True, True, 'cpu'),
             ("sqrt", doubles, True, True, 'cpu'),
             ("sqrt", doubles, False, True, 'cuda'),
             ("tan", doubles, True, True, 'cpu'),
             ("tan", doubles, False, True, 'cuda'),
             ("tanh", doubles, True, True, 'cpu'),
+            ("tanh", bfloat16s, True, True, 'cpu'),
             ("tanh", doubles, False, True, 'cuda'),
             ("trunc", doubles, True, True, 'cpu'),
             ("trunc", doubles, True, True, 'cuda')
@@ -13278,15 +13315,21 @@ class TestTorchDeviceType(TestCase):
         self.assertEqual(a, b.expand(2 ** 31))
 
     @onlyCPU
-    @dtypes(torch.float, torch.double)
+    @dtypes(torch.float, torch.double, torch.bfloat16)
     def test_sigmoid(self, device, dtype):
         # TODO: why not simulate math.sigmoid like with rsqrt?
         inputValues = [-1000, -1, 0, 0.5, 1, 2, 1000]
         expectedOutput = [0.0000, 0.2689, 0.5, 0.6225, 0.7311, 0.8808, 1.000]
+        bf16ExpectedOutput = [0.0000, 0.2695, 0.5000, 0.6211, 0.7305, 0.8828, 1.0000]
         precision_4dps = 0.0002
 
-        self.assertEqual(torch.tensor(inputValues, dtype=dtype, device=device).sigmoid(),
-                         torch.tensor(expectedOutput, dtype=dtype, device=device), precision_4dps)
+        def checkType(tensor, inputVals, expecVals):
+            self.assertEqual(torch.tensor(inputValues, dtype=dtype, device=device).sigmoid(),
+                             torch.tensor(expecVals, dtype=dtype, device=device), precision_4dps)
+
+        checkType(torch.FloatTensor, inputValues, expectedOutput)
+        checkType(torch.DoubleTensor, inputValues, expectedOutput)
+        checkType(torch.BFloat16Tensor, inputValues, bf16ExpectedOutput)
 
     @onlyCPU
     @dtypes(torch.float)
