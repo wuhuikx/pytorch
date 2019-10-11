@@ -259,7 +259,8 @@ static inline Tensor& bmm_out_or_baddbmm_(Tensor& self_or_result, const Tensor& 
   } else if (at::hasMKL() && at::native::is_floating_point(self_or_result)
             && batch_items_contiguous_or_transposed(batch1)
             && batch_items_contiguous_or_transposed(batch2)
-            && self_or_result.is_contiguous()) {
+            && self_or_result.is_contiguous()
+            && (self_or_result.scalar_type() != at::ScalarType::BFloat16)) {
     at::native::_baddbmm_mkl_(self_or_result, batch1, batch2, beta, alpha);
   } else { // split along batch dimension
     if (is_bmm_out) {

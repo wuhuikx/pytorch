@@ -692,6 +692,13 @@ class _TestTorchMixin(object):
     def test_min(self):
         self._testSelection(torch.min, min)
 
+    def test_norm_for_cpu_bfloat16(self):
+        inputValuesFP32 = torch.tensor([[ 1, 2, 3],[-1, 1, 4]] , dtype= torch.float)
+        inputValuesBF16 = inputValuesFP32.bfloat16()
+        precision_3dps = 0.004
+        for p in [0, 1, 2, 3, 4, inf, -inf]:
+            self.assertEqual(torch.norm(inputValuesFP32, p, dim=0), torch.norm(inputValuesBF16, p, dim=0), precision_3dps)
+
     def test_dim_reduction_uint8_overflow(self):
         example = [[-1, 2, 1], [5, 3, 6]]
         x = torch.tensor(example, dtype=torch.uint8)
@@ -701,6 +708,30 @@ class _TestTorchMixin(object):
         y = torch.tensor(example, dtype=torch.uint8)
         torch.sum(x, 0, out=y)
         self.assertEqual(x.sum(0, dtype=torch.uint8), y)
+
+    def test_std_var_for_cpu_bfloat16(self):
+        fns_to_test = [
+            ('var', torch.var, nan),
+            ('std', torch.std, nan)
+        ]
+
+        device = 'cpu'
+        shape = (2, 0, 4)
+        x = torch.randn(shape, device=device).bfloat16()
+        for item in fns_to_test:
+            name, fn, identity = item
+            self.assertEqual(torch.empty((2, 0), device=device, dtype=torch.bfloat16), fn(x, dim=2))
+            self.assertEqual(torch.empty((2, 0, 1), device=device, dtype=torch.bfloat16), fn(x, dim=2, keepdim=True))
+            # assertEqual doesn't work with inf, -inf, nan and two tensors.
+            check = (torch.testing.assert_allclose if math.isnan(identity) or math.isinf(identity) else
+                        self.assertEqual)
+            check(torch.full((2, 4), identity, device=device, dtype=torch.bfloat16), fn(x, dim=1))
+            check(torch.full((2, 1, 4), identity, device=device, dtype=torch.bfloat16), fn(x, dim=1, keepdim=True))
+            try:
+                check(torch.full((), identity, device=device, dtype=torch.bfloat16), fn(x))
+            except TypeError as err:
+                # ignore if there is no allreduce.
+                self.assertTrue('dim' in str(err))
 
     @unittest.skipIf(not TEST_SCIPY, "Scipy not found")
     def test_logsumexp(self):
@@ -840,6 +871,17 @@ class _TestTorchMixin(object):
         res1 = x1.sum(dim=(0, 2), keepdim=True)
         res2 = x1.sum(axis=(0, 2), keepdims=True)
         self.assertEqual(res1, res2)
+
+    def test_baddbmm_for_cpu_bfloat16(self):
+        num_batches = 10
+        M, N, O = 12, 8, 5
+        b1 = torch.randn(num_batches, M, N).bfloat16()
+        b2 = torch.randn(num_batches, N, O).bfloat16()
+        res = torch.bmm(b1, b2)
+        res2 = torch.Tensor().bfloat16().resize_as_(res).zero_()
+
+        res2.baddbmm_(b1, b2)
+        self.assertEqual(res2, res)
 
     def _assert_matches_numpy(self, t, n):
         self.assertEqual(n.shape, t.shape)
