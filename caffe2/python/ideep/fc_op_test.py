@@ -13,9 +13,16 @@ from caffe2.python import core, workspace
 import caffe2.python.hypothesis_test_util as hu
 import caffe2.python.ideep_test_util as mu
 
+import hypothesis
+def no_deadline(fn):
+    try:
+        return hypothesis.settings(deadline=None)(fn)
+    except hypothesis.errors.InvalidArgument:
+        return
 
 @unittest.skipIf(not workspace.C.use_mkldnn, "No MKLDNN support.")
 class FcTest(hu.HypothesisTestCase):
+    @no_deadline
     @given(n=st.integers(1, 5), m=st.integers(1, 5),
            k=st.integers(1, 5), **mu.gcs)
     def test_fc_2_dims(self, n, m, k, gc, dc):
@@ -33,7 +40,7 @@ class FcTest(hu.HypothesisTestCase):
 
         for i in range(3):
             self.assertGradientChecks(gc, op, [X, W, b], i, [0])
-
+    @no_deadline
     @given(n=st.integers(1, 5),
            m=st.integers(1, 5),
            c=st.integers(1, 5),
@@ -128,7 +135,7 @@ class FcTest(hu.HypothesisTestCase):
             print(db0)
             print(np.max(np.abs(db1 - db0)))
             self.assertTrue(False)
-
+    @no_deadline
     @given(n=st.integers(1, 5),
            o=st.integers(1, 5),
            i=st.integers(1, 5),
@@ -223,7 +230,7 @@ class FcTest(hu.HypothesisTestCase):
             print(db0)
             print(np.max(np.abs(db1 - db0)))
             self.assertTrue(False)
-
+    @no_deadline
     @given(n=st.integers(1, 5), m=st.integers(1, 5),
            k=st.integers(1, 5), **mu.gcs)
     def test_fc_4_dims_src(self, n, m, k, gc, dc):
@@ -241,7 +248,7 @@ class FcTest(hu.HypothesisTestCase):
 
         for i in range(3):
             self.assertGradientChecks(gc, op, [X, W, b], i, [0])
-
+    @no_deadline
     @given(n=st.integers(1, 5), m=st.integers(1, 5),
            k=st.integers(1, 5), **mu.gcs)
     def test_fc_4_dims(self, n, m, k, gc, dc):
@@ -259,7 +266,7 @@ class FcTest(hu.HypothesisTestCase):
 
         for i in range(3):
             self.assertGradientChecks(gc, op, [X, W, b], i, [0])
-
+    @no_deadline
     @given(n=st.integers(2, 5), m=st.integers(2, 5),
            k=st.integers(2, 5), **mu.gcs)
     def test_int8_fc_4_dims(self, n, m, k, gc, dc):
