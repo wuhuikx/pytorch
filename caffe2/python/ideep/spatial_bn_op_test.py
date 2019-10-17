@@ -11,10 +11,17 @@ from caffe2.python import brew, core, workspace
 import caffe2.python.hypothesis_test_util as hu
 from caffe2.python.model_helper import ModelHelper
 import caffe2.python.ideep_test_util as mu
+import hypothesis
+def no_deadline(fn):
+    try:
+        return hypothesis.settings(deadline=None)(fn)
+    except hypothesis.errors.InvalidArgument:
+        return
 
 
 @unittest.skipIf(not workspace.C.use_mkldnn, "No MKLDNN support.")
 class TestSpatialBN(hu.HypothesisTestCase):
+    @no_deadline
     @given(size=st.integers(7, 10),
            input_channels=st.integers(7, 10),
            batch_size=st.integers(1, 3),
@@ -55,7 +62,7 @@ class TestSpatialBN(hu.HypothesisTestCase):
             X = X.swapaxes(1, 2).swapaxes(2, 3)
 
         self.assertDeviceChecks(dc, op, [X, scale, bias, mean, var], [0])
-
+    @no_deadline
     @given(size=st.integers(7, 10),
            input_channels=st.integers(7, 10),
            batch_size=st.integers(1, 3),
@@ -93,7 +100,7 @@ class TestSpatialBN(hu.HypothesisTestCase):
         # output[4] for comparison
         self.assertDeviceChecks(dc, op, [X, scale, bias, running_mean, running_var],
             [0, 1, 2, 3])
-
+    @no_deadline
     @given(size=st.integers(7, 10),
            input_channels=st.integers(1, 10),
            batch_size=st.integers(1, 3),

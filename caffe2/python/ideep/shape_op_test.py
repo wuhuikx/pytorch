@@ -11,10 +11,17 @@ from caffe2.proto import caffe2_pb2
 from caffe2.python import core, workspace
 import caffe2.python.hypothesis_test_util as hu
 import caffe2.python.ideep_test_util as mu
+import hypothesis
+def no_deadline(fn):
+    try:
+        return hypothesis.settings(deadline=None)(fn)
+    except hypothesis.errors.InvalidArgument:
+        return
 
 
 @unittest.skipIf(not workspace.C.use_mkldnn, "No MKLDNN support.")
 class ShapeTest(hu.HypothesisTestCase):
+    @no_deadline
     @given(n=st.integers(1, 128),
            c=st.integers(1, 128),
            h=st.integers(1, 128),
@@ -46,7 +53,7 @@ class ShapeTest(hu.HypothesisTestCase):
             print(Y0.flatten())
             print(np.max(np.abs(Y1 - Y0)))
             self.assertTrue(False)
-
+    @no_deadline
     @given(n=st.integers(1, 128),
            c=st.integers(1, 128),
            h=st.integers(1, 128),
