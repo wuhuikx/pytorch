@@ -24,7 +24,9 @@ struct AccumulateType { };
 template <> struct AccumulateType<half, true> { using type = float; };
 #endif
 template <> struct AccumulateType<Half, true> { using type = float; };
+template <> struct AccumulateType<std::complex<float>, true> { using type = std::complex<float>; };
 template <> struct AccumulateType<float, true> { using type = float; };
+template <> struct AccumulateType<std::complex<double>, true> { using type = std::complex<double>; };
 template <> struct AccumulateType<double, true> { using type = double; };
 template <> struct AccumulateType<int8_t, true> { using type = int64_t; };
 template <> struct AccumulateType<uint8_t, true> { using type = int64_t; };
