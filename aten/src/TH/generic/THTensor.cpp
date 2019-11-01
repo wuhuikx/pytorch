@@ -6,6 +6,7 @@
 #include <ATen/NativeFunctions.h>
 #include <new>
 #include <ATen/NamedTensorUtils.h>
+#include <TH/generic/THTensorApply.hpp>
 
 /**** access methods ****/
 THStorage *THTensor_(storage)(const THTensor *self)
@@ -694,20 +695,31 @@ void THTensor_(catArray)(THTensor *result, THTensor **inputs, int numInputs, int
     }
 
     scalar_t* result_data = THStorage_(data)(THTensor_getStoragePtr(result)) + result->storage_offset();
+    int64_t offset_array[outer] = {0};
+    offset_array[0] = 0;
+    for (int o = 1; o < outer; ++o) {
+      offset += inner * cat_dim_size;
+      offset_array[o] = offset;
+    }
+
     offset = 0;
-    for (int o = 0; o < outer; ++o) {
-      for (int j = 0; j < numInputs; ++j) {
-        if (!should_skip(inputs[j])) {
-          THTensor* input0 = inputs[j];
-          scalar_t* input0_data = THStorage_(data)(THTensor_getStoragePtr(input0)) + input0->storage_offset();
-          int64_t local_inner = inner * input0->size(dimension);
-          if (local_inner != 0) {
-            memcpy(result_data + offset, input0_data + o*local_inner, local_inner*sizeof(scalar_t));
-          } // input0_size != 0
-          offset += local_inner;
-        }  // should_skip
-      } // for j
-    } // for i
+    at::parallel_for(0, outer, 100, [&](int64_t start, int64_t end) {
+      for (int o = start; o < end; ++o) {
+        int64_t offset = offset_array[o];
+        for (int j = 0; j < numInputs; ++j) {
+          if (!should_skip(inputs[j])) {
+            THTensor* input0 = inputs[j];
+            scalar_t* input0_data = THStorage_(data)(THTensor_getStoragePtr(input0)) + input0->storage_offset();
+            int64_t local_inner = inner * input0->size(dimension);
+            PRAGMA_SIMD
+            for (int64_t i = 0; i < local_inner; i++) {
+              result_data[offset + i] = input0_data[o*local_inner + i];
+            } // input0_size != 0
+            offset += local_inner;
+          }  // should_skip
+        } // for j
+      } // for o
+    });
   } else {
     offset = 0;
     for (int j = 0; j < numInputs; j++) {
