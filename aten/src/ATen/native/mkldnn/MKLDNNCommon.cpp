@@ -40,6 +40,14 @@ using IDeepTensorWrapperPtr = c10::intrusive_ptr<IDeepTensorWrapper>;
 using MKLDNNTensorImpl = OpaqueTensorImpl<IDeepTensorWrapperPtr>;
 using MKLDNNTensor = Tensor;
 
+ideep::tensor::data_type get_mkldnn_dtype(ScalarType type) {
+  if (type == ScalarType::Float)
+    return ideep::tensor::data_type::f32;
+  else if (type == ScalarType::BFloat16)
+    return ideep::tensor::data_type::bf16;
+  AT_ASSERTM(false, "get_mkldnn_dtype: unsupported data type");
+}
+
 Tensor new_with_itensor_mkldnn(ideep::tensor&& it, const TensorOptions& options) {
   // NOTE: int32_t dims from ideep::tensor but sizes needs int64_t
   // TODO: support int64_t dims in ideep::tensor to avoid extra conversion
@@ -66,12 +74,22 @@ ideep::tensor itensor_view_from_dense(const Tensor& tensor) {
   AT_ASSERTM(
       tensor.layout() == Layout::Strided,
       "itensor_view_from_dense expects dense tensor input");
-  AT_ASSERTM(tensor.scalar_type() == ScalarType::Float,
-             "itensor_view_from_dense expects float tensor input");
+  AT_ASSERTM(tensor.scalar_type() == ScalarType::Float ||
+             tensor.scalar_type() == ScalarType::BFloat16,
+             "itensor_view_from_dense expects bfloat16 or float tensor input");
+  AT_ASSERTM(
+      !tensor.is_variable(),
+      "itensor_view_from_dense: should not be a variable");
   TORCH_INTERNAL_ASSERT(at::impl::variable_excluded_from_dispatch());
-  return {{{tensor.sizes().cbegin(), tensor.sizes().cend()},
-           ideep::tensor::data_type::f32},
-          tensor.template data_ptr<float>()};
+  if (tensor.scalar_type() == ScalarType::Float) {
+    return {{{tensor.sizes().cbegin(), tensor.sizes().cend()},
+             get_mkldnn_dtype(tensor.scalar_type())},
+            tensor.template data_ptr<float>()};
+  } else {
+    return {{{tensor.sizes().cbegin(), tensor.sizes().cend()},
+             get_mkldnn_dtype(tensor.scalar_type())},
+            tensor.template data_ptr<BFloat16>()};
+  }
 }
 
 // Note in case the aten Tensor is a dense tensor, the retured ideep
