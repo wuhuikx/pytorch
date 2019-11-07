@@ -676,6 +676,7 @@ void THTensor_(catArray)(THTensor *result, THTensor **inputs, int numInputs, int
 
   // First path is for contiguous inputs
   // Second path for non-contiguous
+  int64_t offset;
   if (allContiguous) {
     int64_t outer = 1, inner = 1;
 
@@ -695,16 +696,16 @@ void THTensor_(catArray)(THTensor *result, THTensor **inputs, int numInputs, int
 
     scalar_t* result_data = THStorage_(data)(THTensor_getStoragePtr(result)) + result->storage_offset();
     int64_t offset_array[outer] = {0};
-    int64_t offset = 0;
     offset_array[0] = 0;
     for (int o = 1; o < outer; ++o) {
       offset += inner * cat_dim_size;
       offset_array[o] = offset;
     }
 
+    offset = 0;
     at::parallel_for(0, outer, 100, [&](int64_t start, int64_t end) {
       for (int o = start; o < end; ++o) {
-        int64_t local_offset = offset_array[o];
+        int64_t offset = offset_array[o];
         for (int j = 0; j < numInputs; ++j) {
           if (!should_skip(inputs[j])) {
             THTensor* input0 = inputs[j];
@@ -714,13 +715,13 @@ void THTensor_(catArray)(THTensor *result, THTensor **inputs, int numInputs, int
             for (int64_t i = 0; i < local_inner; i++) {
               result_data[offset + i] = input0_data[o*local_inner + i];
             } // input0_size != 0
-            local_offset += local_inner;
+            offset += local_inner;
           }  // should_skip
         } // for j
       } // for o
     });
   } else {
-    int64_t offset = 0;
+    offset = 0;
     for (int j = 0; j < numInputs; j++) {
       if (!should_skip(inputs[j])) {
         int64_t dimSize = inputs[j]->size(dimension);
