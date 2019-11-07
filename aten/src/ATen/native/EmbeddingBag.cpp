@@ -4,7 +4,6 @@
 #include <ATen/TensorUtils.h>
 
 #include <TH/THBlasUtils.h>
-#include <TH/generic/THTensorApply.hpp>
 
 #include <caffe2/perfkernels/embedding_lookup_idx.h>
 
@@ -404,67 +403,9 @@ _embedding_bag_cpu(const Tensor &weight, const Tensor &indices,
   }
 }
 
-Tensor _embedding_bag_sparse_backward_cpu_sum_fast(
-    const Tensor &grad_, const Tensor &indices, const Tensor &offsets, int64_t num_weights, int64_t mode, const Tensor& per_sample_weights) {
-
-  AT_ASSERT(mode == MODE_SUM);
-  AT_ASSERT((grad_.scalar_type() == kFloat)&& (grad_.stride(1) == 1) && !per_sample_weights.defined());
-
-  int64_t indices_size0 = indices.size(0);
-  int64_t ddim = grad_.size(1);
-  Tensor index_grad = at::empty({indices_size0, ddim}, grad_.options());
-  float* gradout_data = index_grad.data_ptr<float>();
-
-  auto offsets_accessor = offsets.accessor<int64_t, 1>();
-  auto offset_numel = offsets.numel();
-
-  float* grad_data = grad_.data_ptr<float>();
-  auto grad_stride0 = grad_.stride(0);
-
-  at::parallel_for(0, offset_numel, 1000, [&](int64_t start, int64_t end) {
-    for(auto mb = start; mb < end; mb++) {
-      int64_t select_off_start = offsets_accessor[mb];
-      int64_t select_off_end = (mb < (offset_numel - 1) ? offsets_accessor[mb + 1] : indices_size0);
-      auto grad_offset = grad_stride0 * mb;
-      for(auto s = select_off_start; s < select_off_end; s++) {
-        auto gradout_block = gradout_data + ddim * s;
-        PRAGMA_SIMD
-        for (auto v = 0; v < ddim; v++) {
-          gradout_block[v] = grad_data[grad_offset + v];
-        }
-      }
-    }
-  });
-
-  int64_t num_features = index_grad.size(-1);
-  auto weight_size = std::array<int64_t, 2>{{ num_weights, num_features }};
-  auto dense_options = index_grad.options();
-
-  if (index_grad.numel() == 0) {
-    return at::_sparse_coo_tensor_unsafe(at::empty({1, 0}, indices.options()),
-                                         at::empty({0, num_features}, dense_options),
-                                         weight_size);
-  }
-
-  auto index = indices.reshape({1, -1});
-  auto values = index_grad.reshape({-1, num_features});
-
-  return at::_sparse_coo_tensor_unsafe(index, values, weight_size);
-
-}
-
-// To save compute, if we are going to go down the fast path case for the 'sum'
-// mode, we skip calculating offset2bag, since it is not going to be used.
-static inline bool _embedding_bag_sparse_fast_path_sum(const Tensor& grad,
-      const Tensor& per_sample_weights,
-      int64_t mode, bool sparse) {
-  if (!sparse) return false;
-  if (mode != MODE_SUM || grad.scalar_type() != kFloat || grad.stride(1) != 1) return false;
-  if (per_sample_weights.defined()) return false;
-  return true;
-}
-
-Tensor _embedding_bag_backward_cpu(const Tensor &grad, const Tensor &indices,
+// Assumes all input tensors are contiguous.
+// See NOTE [ embedding_bag Native Functions ] in native_functions.yaml for details
+Tensor _embedding_bag_backward(const Tensor &grad, const Tensor &indices,
                               const Tensor &offsets,
                               const Tensor &offset2bag,
                               const Tensor &bag_size_,
@@ -479,10 +420,6 @@ Tensor _embedding_bag_backward_cpu(const Tensor &grad, const Tensor &indices,
   auto offsets_arg = TensorArg(offsets, "offsets", 1);
   checkScalarType("embedding_bag", offsets_arg, kLong);
   checkContiguous("embedding_bag", offsets_arg);
-
-  if (_embedding_bag_sparse_fast_path_sum(grad, per_sample_weights, mode, sparse )) {
-    return _embedding_bag_sparse_backward_cpu_sum_fast(grad, indices, offsets, num_weights, mode, per_sample_weights);
-  }
 
   Tensor offset2bag_;
   if (indices.numel() != 0 && offset2bag.numel() == 0) {
