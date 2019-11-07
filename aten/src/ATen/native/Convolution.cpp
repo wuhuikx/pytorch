@@ -629,12 +629,10 @@ at::Tensor _convolution(
     }
   } else if (params.use_mkldnn(input)) {
 #if AT_MKLDNN_ENABLED()
-    TORCH_CHECK(input.type() == weight.type()
-                || (input.is_mkldnn() && weight.type().backend() == at::Backend::CPU && weight.scalar_type() == kFloat),
+    TORCH_CHECK(input.type() == weight.type(),
              "Input type (", input.type().toString(), ") and weight type (", weight.type().toString(),
              ") should be the same");
-    TORCH_CHECK(!bias.defined() || (input.type() == bias.type())
-                || (input.is_mkldnn() && bias.type().backend() == at::Backend::CPU && bias.scalar_type() == kFloat),
+    TORCH_CHECK(!bias.defined() || (input.type() == bias.type()),
              "Input type (", input.type().toString(), ") and bias type (", bias.type().toString(),
              ") should be the same");
     if (!input_is_mkldnn) {
