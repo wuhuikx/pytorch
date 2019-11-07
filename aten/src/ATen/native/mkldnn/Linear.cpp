@@ -109,12 +109,12 @@ std::tuple<Tensor, Tensor> mkldnn_linear_backward_weights(
   }
 
   if (weight.is_mkldnn()) {
-    return std::tuple<Tensor, Tensor>{new_with_itensor_mkldnn(std::move(gradw), weight.options()),
-      new_with_itensor_mkldnn(std::move(gradb), weight.options())};
+    return std::tuple<Tensor, Tensor>{new_with_itensor_mkldnn(std::move(gradw), grad_output.options()),
+      new_with_itensor_mkldnn(std::move(gradb), grad_output.options())};
   } else {
     return std::tuple<Tensor, Tensor>{
-      mkldnn_to_dense(new_with_itensor_mkldnn(std::move(gradw), weight.options())),
-      mkldnn_to_dense(new_with_itensor_mkldnn(std::move(gradb), weight.options()))};
+      mkldnn_to_dense(new_with_itensor_mkldnn(std::move(gradw), grad_output.options())),
+      mkldnn_to_dense(new_with_itensor_mkldnn(std::move(gradb), grad_output.options()))};
   }
 }
 
