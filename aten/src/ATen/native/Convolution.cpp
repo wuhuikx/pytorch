@@ -180,8 +180,7 @@ auto ConvParams::use_mkldnn(const at::Tensor& input) const -> bool {
   }
   return (input.is_mkldnn()) || // input is mkldnn Tensor
     (input.type().backend() == at::Backend::CPU &&
-     (input.scalar_type() == kFloat ||
-      input.scalar_type() == kBFloat16) && // only on CPU BF16 or Float Tensors
+     input.scalar_type() == kFloat && // only on CPU Float Tensors
      !is_dilated() && // doesn't support dilation
      !transposed && // or transposed tensors
      input.ndimension() == 4); // must be in NCHW format
@@ -631,11 +630,11 @@ at::Tensor _convolution(
   } else if (params.use_mkldnn(input)) {
 #if AT_MKLDNN_ENABLED()
     TORCH_CHECK(input.type() == weight.type()
-                || (input.is_mkldnn() && weight.scalar_type() == kFloat),
+                || (input.is_mkldnn() && weight.type().backend() == at::Backend::CPU && weight.scalar_type() == kFloat),
              "Input type (", input.type().toString(), ") and weight type (", weight.type().toString(),
              ") should be the same");
     TORCH_CHECK(!bias.defined() || (input.type() == bias.type())
-                || (input.is_mkldnn() && bias.scalar_type() == kFloat),
+                || (input.is_mkldnn() && bias.type().backend() == at::Backend::CPU && bias.scalar_type() == kFloat),
              "Input type (", input.type().toString(), ") and bias type (", bias.type().toString(),
              ") should be the same");
     if (!input_is_mkldnn) {

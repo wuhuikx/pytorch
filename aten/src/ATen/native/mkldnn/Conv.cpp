@@ -243,12 +243,12 @@ std::tuple<Tensor,Tensor> mkldnn_convolution_backward_weights(
       bias_defined);
   if (weight.is_mkldnn()) {
     return std::tuple<Tensor, Tensor>{
-        new_with_itensor_mkldnn(std::move(mkldnn_grad_weight), weight.options()),
-        new_with_itensor_mkldnn(std::move(mkldnn_grad_bias), weight.options())};
+        new_with_itensor_mkldnn(std::move(mkldnn_grad_weight), grad_output.options()),
+        new_with_itensor_mkldnn(std::move(mkldnn_grad_bias), grad_output.options())};
   } else {
     return std::tuple<Tensor, Tensor>{
-        mkldnn_to_dense(new_with_itensor_mkldnn(std::move(mkldnn_grad_weight), weight.options())),
-        mkldnn_to_dense(new_with_itensor_mkldnn(std::move(mkldnn_grad_bias), weight.options()))};
+        mkldnn_to_dense(new_with_itensor_mkldnn(std::move(mkldnn_grad_weight), grad_output.options())),
+        mkldnn_to_dense(new_with_itensor_mkldnn(std::move(mkldnn_grad_bias), grad_output.options()))};
   }
 }
 

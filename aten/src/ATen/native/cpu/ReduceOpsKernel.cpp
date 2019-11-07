@@ -9,7 +9,6 @@
 #include <ATen/native/TensorIterator.h>
 #include <ATen/native/SharedReduceOps.h>
 #include <ATen/native/cpu/Reduce.h>
-#include <ATen/AccumulateType.h>
 #include <c10/util/Optional.h>
 
 namespace at { namespace native { namespace {
@@ -17,18 +16,8 @@ namespace at { namespace native { namespace {
 using namespace vec256;
 
 static void sum_kernel_impl(TensorIterator& iter) {
-  if (iter.dtype() == kBFloat16) {
-    using scalar_t = at::BFloat16;
-    using acc_t = acc_type<scalar_t, false>;
-    return binary_kernel_reduce(
-        iter,
-        func_wrapper<scalar_t, acc_t>(
-          [=](acc_t a, scalar_t b, int64_t /*idx*/) -> acc_t { return a + b; },
-          [=](acc_t a, acc_t b) -> acc_t { return a + b; }),
-        acc_t(0));
-  }
-  AT_DISPATCH_ALL_TYPES_AND_COMPLEX_AND(
-      ScalarType::Bool, iter.dtype(), "sum_cpu", [&] {
+  AT_DISPATCH_ALL_TYPES_AND_COMPLEX_AND2(
+      ScalarType::BFloat16, ScalarType::Bool, iter.dtype(), "sum_cpu", [&] {
         binary_kernel_reduce_vec(
             iter, [=](scalar_t a, scalar_t b) -> scalar_t { return a + b; },
             [=](Vec256<scalar_t> a, Vec256<scalar_t> b) { return a + b; });
