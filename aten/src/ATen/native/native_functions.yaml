@@ -1459,15 +1459,6 @@
   dispatch:
     MkldnnCPU: mkldnn_linear
 
-- func: mkldnn_linear_backward_input(int[] input_size, Tensor grad_output, Tensor weight) -> Tensor
-
-- func: mkldnn_linear_backward_weights(Tensor grad_output, Tensor input, Tensor weight, bool bias_defined) -> (Tensor, Tensor)
-
-- func: mkldnn_linear_backward(Tensor input, Tensor grad_output, Tensor weight, bool[3] output_mask) -> (Tensor, Tensor, Tensor)
-  python_module: nn
-  dispatch:
-    MkldnnCPU: mkldnn_linear_backward
-
 - func: fbgemm_linear_int8_weight_fp32_activation(Tensor input, Tensor weight, Tensor packed, Tensor col_offsets, Scalar weight_scale, Scalar weight_zero_point, Tensor bias) -> Tensor
 
 - func: fbgemm_linear_int8_weight(Tensor input, Tensor weight, Tensor packed, Tensor col_offsets, Scalar weight_scale, Scalar weight_zero_point, Tensor bias) -> Tensor
@@ -1667,10 +1658,6 @@
   dispatch:
     QuantizedCPU: quantized_max_pool2d
 
-- func: mkldnn_max_pool2d_backward(Tensor grad_output, Tensor output, Tensor input, int[2] kernel_size, int[2] stride=[], int[2] padding=0, int[2] dilation=1, bool ceil_mode=False) -> Tensor
-  dispatch:
-    MkldnnCPU: mkldnn_max_pool2d_backward
-
 - func: max_pool3d(Tensor self, int[3] kernel_size, int[3] stride=[], int[3] padding=0, int[3] dilation=1, bool ceil_mode=False) -> Tensor
 
 # The CPU and GPU dispatch variants are named weirdly here because otherwise there
@@ -1743,7 +1730,7 @@
 
 - func: mkldnn_convolution_backward_input(int[] self_size, Tensor grad_output, Tensor weight, int[] padding, int[] stride, int[] dilation, int groups, bool bias_defined) -> Tensor
 
-- func: mkldnn_convolution_backward_weights(Tensor weight, Tensor grad_output, Tensor self, int[] padding, int[] stride, int[] dilation, int groups, bool bias_defined) -> (Tensor, Tensor)
+- func: mkldnn_convolution_backward_weights(int[] weight_size, Tensor grad_output, Tensor self, int[] padding, int[] stride, int[] dilation, int groups, bool bias_defined) -> (Tensor, Tensor)
 
 - func: mkldnn_convolution_backward(Tensor self, Tensor grad_output, Tensor weight, int[] padding, int[] stride, int[] dilation, int groups, bool[3] output_mask) -> (Tensor, Tensor, Tensor)
 
@@ -1957,7 +1944,6 @@
   dispatch:
     CPU: batch_norm_backward_cpu
     CUDA: batch_norm_backward_cuda
-    MkldnnCPU: mkldnn_batch_norm_backward
 
 - func: batch_norm_backward_reduce(Tensor grad_out, Tensor input, Tensor mean, Tensor invstd, Tensor? weight, bool input_g, bool weight_g, bool bias_g) -> (Tensor, Tensor, Tensor, Tensor)
   dispatch:
@@ -2246,8 +2232,6 @@
     CUDA: relu_
     MkldnnCPU: mkldnn_relu_
     QuantizedCPU: quantized_relu_
-
-- func: mkldnn_relu_backward(Tensor grad_output, Tensor input) -> Tensor
 
 - func: prelu(Tensor self, Tensor weight) -> Tensor
   use_c10_dispatcher: full
@@ -5674,11 +5658,6 @@
     MkldnnCPU: mkldnn_adaptive_avg_pool2d
   requires_tensor: True
 
-- func: mkldnn_adaptive_avg_pool2d_backward(Tensor grad_output, Tensor self) -> Tensor
-  dispatch:
-    MkldnnCPU: mkldnn_adaptive_avg_pool2d_backward
-  requires_tensor: True
-
 - func: _adaptive_avg_pool2d(Tensor self, int[2] output_size) -> Tensor
   dispatch:
     CPU: adaptive_avg_pool2d_cpu
@@ -5791,14 +5770,12 @@
   dispatch:
     CPU: avg_pool2d_backward_out_cpu
     CUDA: avg_pool2d_backward_out_cuda
-    MkldnnCPU: mkldnn_avg_pool2d_backward_out
 
 - func: avg_pool2d_backward(Tensor grad_output, Tensor self, int[2] kernel_size, int[2] stride, int[2] padding, bool ceil_mode, bool count_include_pad, int? divisor_override) -> Tensor
   python_module: nn
   dispatch:
     CPU: avg_pool2d_backward_cpu
     CUDA: avg_pool2d_backward_cuda
-    MkldnnCPU: mkldnn_avg_pool2d_backward
 
 - func: avg_pool3d.out(Tensor self, int[3] kernel_size, int[3] stride=[], int[3] padding=0, bool ceil_mode=False, bool count_include_pad=True, int? divisor_override=None, *, Tensor(a!) out) -> Tensor(a!)
   python_module: nn
