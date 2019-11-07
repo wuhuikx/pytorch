@@ -2657,14 +2657,6 @@ class _TestTorchMixin(object):
                 added = zeros.index_add(0, torch.arange(0, size[0], dtype=torch.long, device=device), tensor)
                 self.assertEqual(added, tensor)
 
-    def test_index_select_for_cpu_bfloat16(self):
-        src = torch.rand(3, 4, 5, device="cpu", dtype=torch.float32, requires_grad=True).bfloat16()
-        idx = torch.tensor([2, 1, 0, 1, 2], dtype=torch.long, device="cpu")
-        dest = torch.index_select(src, 0, idx)
-        self.assertEqual(dest.shape, (5, 4, 5))
-        for i in range(idx.size(0)):
-            self.assertEqual(dest[i], src[idx[i]])
-
     def test_t(self):
         # Test 0D tensors
         x = torch.randn(())

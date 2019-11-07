@@ -158,7 +158,6 @@
   name: _th_index_select
   cpu_bool: True
   cuda_bool: True
-  cpu_bfloat16: True
   cname: indexSelect
   variants:
     - function
