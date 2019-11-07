@@ -30,7 +30,7 @@ namespace {
 using namespace vec256;
 
 static void sigmoid_kernel(TensorIterator& iter) {
-  AT_DISPATCH_FLOATING_AND_COMPLEX_TYPES_AND1(at::ScalarType::BFloat16, iter.dtype(), "sigmoid_cpu", [&]() {
+  AT_DISPATCH_FLOATING_AND_COMPLEX_TYPES(iter.dtype(), "sigmoid_cpu", [&]() {
     cpu_kernel_vec(
         iter,
         [=](scalar_t a) -> scalar_t { return ((scalar_t)(1) / ((scalar_t)(1) + std::exp((-a)))); },
@@ -54,7 +54,7 @@ uint8_t abs_impl(uint8_t v) {
 }
 
 static void abs_kernel(TensorIterator& iter) {
-  AT_DISPATCH_FLOATING_AND_COMPLEX_TYPES_AND1(at::ScalarType::BFloat16, iter.dtype(), "abs_cpu", [&]() {
+  AT_DISPATCH_ALL_TYPES_AND_COMPLEX(iter.dtype(), "abs_cpu", [&]() {
     cpu_kernel_vec(
         iter,
         [=](scalar_t a) -> scalar_t { return abs_impl(a); },
@@ -358,7 +358,7 @@ static void rsqrt_kernel(TensorIterator& iter) {
 #define IMPLEMENT_COMPLEX_KERNEL(dispatchtypes, op)                             \
   static void op##_kernel(TensorIterator& iter) {                             \
     TORCH_INTERNAL_ASSERT(iter.ntensors() == 2);                              \
-    AT_DISPATCH_SOME_TYPES(iter.dtype(), op##_vml_cpu, [&]() {                \
+    AT_DISPATCH_FLOATING_AND_COMPLEX_TYPES(iter.dtype(), op##_vml_cpu, [&]() {\
       iter.serial_for_each(                                                   \
           [&](char** data_, const int64_t* strides, int64_t n) {              \
             scalar_t* out_data = reinterpret_cast<scalar_t*>(data_[0]);       \
@@ -413,7 +413,6 @@ REGISTER_DISPATCH(clamp_min_stub, &clamp_min_kernel);
 
 
 // IMPLEMENT_FLOAT_KERNEL(ALL, abs)
-#define AT_DISPATCH_SOME_TYPES AT_DISPATCH_FLOATING_AND_COMPLEX_TYPES
 IMPLEMENT_COMPLEX_KERNEL(FLOATING, acos)
 IMPLEMENT_COMPLEX_KERNEL(FLOATING, asin)
 IMPLEMENT_COMPLEX_KERNEL(FLOATING, atan)
@@ -435,17 +434,8 @@ IMPLEMENT_COMPLEX_KERNEL(FLOATING, sin)
 // IMPLEMENT_FLOAT_KERNEL(FLOATING, sinh)
 IMPLEMENT_COMPLEX_KERNEL(FLOATING, sqrt)
 IMPLEMENT_COMPLEX_KERNEL(FLOATING, tan)
+IMPLEMENT_COMPLEX_KERNEL(FLOATING, tanh)
 IMPLEMENT_COMPLEX_KERNEL(FLOATING, trunc)
 IMPLEMENT_FLOAT_KERNEL(FLOATING, lgamma)
-
-#define AT_DISPATCH_FLOATING_AND_COMPLEX_TYPES_AND_BFLOAT16(TYPE, NAME, args...) \
-  AT_DISPATCH_FLOATING_AND_COMPLEX_TYPES_AND1(at::ScalarType::BFloat16, TYPE, NAME, args)
-
-#if defined(AT_DISPATCH_SOME_TYPES)
-#undef  AT_DISPATCH_SOME_TYPES
-#endif
-#define AT_DISPATCH_SOME_TYPES AT_DISPATCH_FLOATING_AND_COMPLEX_TYPES_AND_BFLOAT16
-
-IMPLEMENT_COMPLEX_KERNEL(FLOATING, tanh)
 
 }} // namespace at::native
