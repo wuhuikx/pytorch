@@ -6,6 +6,7 @@
 #include <ATen/native/TensorIterator.h>
 #include <ATen/Parallel.h>
 #include <ATen/cpu/vec256/vec256.h>
+#include <ATen/native/cpu/AtomicAddFloat.h>
 
 namespace at { namespace native {
 namespace {
@@ -69,14 +70,8 @@ void cpu_index_kernel(TensorIterator& iter, IntArrayRef index_size, IntArrayRef 
     if (is_constant_index(ntensor, strides)) {
       // specialization for when every element uses the same index
       int64_t offset = indexer.get(0);
-      if (strides[0] == sizeof(scalar_t) && strides[1] == sizeof(scalar_t)) {
-        for (int64_t i = 0; i < n; i++) {
-          f(dst + strides[0] * i, src + strides[1] * i, offset);
-        }
-      } else {
-        for (int64_t i = 0; i < n; i++) {
-          f(dst + strides[0] * i, src + strides[1] * i, offset);
-        }
+      for (int64_t i = 0; i < n; i++) {
+        f(dst + strides[0] * i, src + strides[1] * i, offset);
       }
     } else {
       for (int64_t i = 0; i < n; i++) {
@@ -88,7 +83,7 @@ void cpu_index_kernel(TensorIterator& iter, IntArrayRef index_size, IntArrayRef 
   if (serial_execution) {
     iter.serial_for_each(loop, {0, iter.numel()});
   } else {
-    iter.for_each(loop);
+    iter.for_each(loop, 1024);
   }
 }
 
@@ -104,11 +99,19 @@ void index_put_kernel(TensorIterator& iter, IntArrayRef index_size, IntArrayRef 
   // NOTE: duplicate indices are only supported if accumulate is true.
   AT_DISPATCH_ALL_TYPES_AND2(at::ScalarType::Half, at::ScalarType::Bool, iter.dtype(), "index_put", [&] {
     if (accumulate) {
-      // TODO: investigate parallelization of the accumulate kernel. Unlike the non-accumulate case,
-      // this needs to be thread-safe.
-      cpu_index_kernel<scalar_t>(iter, index_size, index_stride, [](char* dst, char* src, int64_t offset) {
-        *(scalar_t*)(dst + offset) += *(scalar_t*)src;
-      }, /*serial_execution=*/true);
+      if (iter.dtype() == at::ScalarType::Float) {
+        cpu_index_kernel<float>(iter, index_size, index_stride, [](char* dst, char* src, int64_t offset) {
+          {
+            cpu_atomic_add_float((float*)(dst + offset), *(float*)src);
+          }
+        });
+      } else {
+        cpu_index_kernel<scalar_t>(iter, index_size, index_stride, [](char* dst, char* src, int64_t offset) {
+          {
+            *(scalar_t*)(dst + offset) += *(scalar_t*)src;
+          }
+        }, /*serial_execution=*/false);
+      }
     } else {
       cpu_index_kernel<scalar_t>(iter, index_size, index_stride, [](char* dst, char* src, int64_t offset) {
         *(scalar_t*)(dst + offset) = *(scalar_t*)src;

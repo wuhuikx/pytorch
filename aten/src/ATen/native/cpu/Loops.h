@@ -158,7 +158,7 @@ vectorized_loop(char** C10_RESTRICT data_, int64_t n, int64_t S, func_t op, vec_
     for (int arg = 0; arg < ntensors; arg++) {
       strides[arg] = (S > 0 && arg == S) ? 0 : sizeof(scalar_t);
     }
-    basic_loop(data, strides, i, n, op);
+    execute_op(data, strides, i, n, op);
   }
 }
 
@@ -219,7 +219,7 @@ void cpu_kernel_vec(TensorIterator& iter, func_t op, vec_func_t vop) {
         }
       });
     }
-  });
+  }, 1024);
   iter.cast_outputs();
 }
 
