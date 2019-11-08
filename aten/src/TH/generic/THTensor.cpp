@@ -673,43 +673,53 @@ void THTensor_(catArray)(THTensor *result, THTensor **inputs, int numInputs, int
   }
   allContiguous = allContiguous && THTensor_(isContiguous)(result);
 
+  // Outer is the product of dimensions from the left up to (and not
+  // including the concatenation dimension). This becomes the number of times
+  // we have to replicate the memcpy call.
+  int64_t outer = 1;
+  for (int i = 0; i < dimension; ++i) {
+    outer *= size[i];
+  }
+
+  const int64_t threshold = 64;
   // First path is for contiguous inputs
   // Second path for non-contiguous
-  int64_t offset;
-  if (allContiguous) {
-    int64_t outer = 1, inner = 1;
-
-    // Outer is the product of dimensions from the left up to (and not
-    // including the concatenation dimension). This becomes the number of times
-    // we have to replicate the memcpy call.
-    for (int i = 0; i < dimension; ++i) {
-      outer *= size[i];
-    }
-
+  if (allContiguous && (outer > threshold)) {
     // The product of dimensions to the right of the concatenation dimension.
     // We go on to multiply this by the size of the concat dimension for
     // each input tensor.
+    int64_t inner = 1;
     for (int i = dimension + 1; i < int(size.size()); ++i) {
       inner *= size[i];
     }
 
     scalar_t* result_data = THStorage_(data)(THTensor_getStoragePtr(result)) + result->storage_offset();
-    offset = 0;
-    for (int o = 0; o < outer; ++o) {
-      for (int j = 0; j < numInputs; ++j) {
-        if (!should_skip(inputs[j])) {
-          THTensor* input0 = inputs[j];
-          scalar_t* input0_data = THStorage_(data)(THTensor_getStoragePtr(input0)) + input0->storage_offset();
-          int64_t local_inner = inner * input0->size(dimension);
-          if (local_inner != 0) {
-            memcpy(result_data + offset, input0_data + o*local_inner, local_inner*sizeof(scalar_t));
-          } // input0_size != 0
-          offset += local_inner;
-        }  // should_skip
-      } // for j
-    } // for i
+    int64_t offset_array[outer] = {0};
+    int64_t offset = 0;
+    offset_array[0] = offset;
+    for (int o = 1; o < outer; ++o) {
+      offset += inner * cat_dim_size;
+      offset_array[o] = offset;
+    }
+
+    at::parallel_for(0, outer, threshold, [&](int64_t start, int64_t end) {
+      for (int o = start; o < end; ++o) {
+        int64_t offset = offset_array[o];
+        for (int j = 0; j < numInputs; ++j) {
+          if (!should_skip(inputs[j])) {
+            THTensor* input0 = inputs[j];
+            scalar_t* input0_data = THStorage_(data)(THTensor_getStoragePtr(input0)) + input0->storage_offset();
+            int64_t local_inner = inner * input0->size(dimension);
+            if (local_inner != 0) {
+              memcpy(result_data + offset, input0_data + o*local_inner, local_inner*sizeof(scalar_t));
+            } // input0_size != 0
+            offset += local_inner;
+          }  // should_skip
+        } // for j
+      } // for o
+    });
   } else {
-    offset = 0;
+    int64_t offset = 0;
     for (int j = 0; j < numInputs; j++) {
       if (!should_skip(inputs[j])) {
         int64_t dimSize = inputs[j]->size(dimension);
