@@ -339,8 +339,18 @@ void Pickler::pushLiteralTensor(const IValue& ivalue) {
       case at::kPerChannelAffine: {
         const auto* quantizer = static_cast<at::PerChannelAffineQuantizer*>(
             tensor.quantizer().get());
-        pushIValue(c10::List<double>(quantizer->scales()));
-        pushIValue(c10::List<int64_t>(quantizer->zero_points()));
+        auto scales = quantizer->scales();
+        pushStorageOfTensor(scales);
+        pushInt(scales.storage_offset());
+        pushInt(scales.sizes()[0]);
+        pushInt(scales.strides()[0]);
+
+        auto zero_points = quantizer->zero_points();
+        pushStorageOfTensor(zero_points);
+        pushInt(zero_points.storage_offset());
+        pushInt(zero_points.sizes()[0]);
+        pushInt(zero_points.strides()[0]);
+
         pushInt(quantizer->axis());
       } break;
       default:

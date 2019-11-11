@@ -160,9 +160,19 @@ def _rebuild_qtensor(storage, storage_offset, size, stride, quantizer_params, re
         _, scale, zero_point = quantizer_params
         tensor = torch._empty_affine_quantized(size, scale=scale, zero_point=zero_point, dtype=storage.dtype)
     elif qscheme == torch.per_channel_affine:
-        _, scales, zero_points, axis = quantizer_params
-        scales = torch.tensor(scales, dtype=torch.float64)
-        zero_points = torch.tensor(zero_points, dtype=torch.int64)
+        if len(quantizer_params) == 4:
+            _, scales, zero_points, axis = quantizer_params
+            scales = torch.tensor(scales, dtype=torch.float64)
+            zero_points = torch.tensor(zero_points, dtype=torch.int64)
+        elif len(quantizer_params) == 10:
+            _, scales_storage, scales_offset, scales_size, scales_stride, \
+            zero_points_storage, zero_points_offset, zero_points_size, zero_points_stride, axis = quantizer_params
+            scales = torch.empty_strided((scales_size, ), (scales_stride, ))
+            scales.set_(scales_storage, scales_offset, (scales_size, ), (scales_stride, ))
+            zero_points = torch.empty_strided((zero_points_size, ), (zero_points_stride, ), dtype=torch.long)
+            zero_points.set_(zero_points_storage, zero_points_offset, (zero_points_size, ), (zero_points_stride, ))
+        else:
+            raise RuntimeError("quantizeir_params can only have 4 or 10 elements")
         tensor = torch._empty_per_channel_affine_quantized(
             size, scales=scales, zero_points=zero_points, axis=axis, dtype=storage.dtype)
     else:
