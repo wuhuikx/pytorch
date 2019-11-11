@@ -9,6 +9,18 @@ namespace torch {
 namespace jit {
 
 using ::c10::IValue;
+static inline at::Tensor restore_tensor_from_qparams(const std::vector<IValue>& qparams, int64_t & idx){
+  const auto& storage = qparams.at(idx++).toTensor();
+  int64_t offset = qparams.at(idx++).toInt();
+  int64_t size = qparams.at(idx++).toInt();
+  int64_t stride = qparams.at(idx++).toInt();
+  at::Tensor results = at::empty({0}, storage.options());
+  at::TensorImpl* results_impl = results.unsafeGetTensorImpl();
+  results_impl->set_storage(storage.storage());
+  results_impl->set_storage_offset(offset);
+  results_impl->set_sizes_and_strides(size, stride);
+  return results;
+}
 
 PicklerClass getClass(const std::string& str) {
   if (str == "build_tensor_from_id") {
@@ -444,26 +456,23 @@ PickleOpCode Unpickler::readInstruction() {
           if (quantized) {
             auto qparams_tuple = elements.at(idx++).toTuple();
             const auto& qparams = qparams_tuple->elements();
-            auto qscheme = static_cast<at::QScheme>(qparams.at(0).toInt());
+            int64_t qidx = 0;
+            auto qscheme = static_cast<at::QScheme>(qparams.at(qidx++).toInt());
             switch (qscheme) {
               case at::kPerTensorAffine: {
-                double q_scale = qparams.at(1).toDouble();
-                int64_t q_zero_point = qparams.at(2).toInt();
+                double q_scale = qparams.at(qidx++).toDouble();
+                int64_t q_zero_point = qparams.at(qidx++).toInt();
                 result = at::_empty_affine_quantized(
                     {0}, storage_tensor.options(), q_scale, q_zero_point);
               } break;
               case at::kPerChannelAffine: {
-                const auto& scales_list = qparams.at(1).toDoubleList();
-                std::vector<double> scales(
-                    scales_list.begin(), scales_list.end());
-                const auto& zero_points_list = qparams.at(2).toIntList();
-                std::vector<int64_t> zero_points(
-                    zero_points_list.begin(), zero_points_list.end());
-                int64_t axis = qparams.at(3).toInt();
+                at::Tensor scales = restore_tensor_from_qparams(qparams, qidx);
+                at::Tensor zero_points = restore_tensor_from_qparams(qparams, qidx);
+                int64_t axis = qparams.at(qidx).toInt();
                 result = _empty_per_channel_affine_quantized(
                     {0},
-                    at::tensor(scales),
-                    at::tensor(zero_points),
+                    scales,
+                    zero_points,
                     axis,
                     storage_tensor.options());
               } break;
