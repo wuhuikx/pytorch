@@ -10,6 +10,10 @@
 #include <ATen/WrapDimUtilsMulti.h>
 
 #include <TH/THBlasUtils.h>
+#include <TH/generic/THTensorApply.hpp>
+
+#include <atomic>
+#include <immintrin.h>
 
 namespace at { namespace native {
 
@@ -355,27 +359,153 @@ SparseTensor& add_out_sparse_cpu(SparseTensor& r, const SparseTensor& t, const S
 // add(Tensor, SparseTensor, Scalar)
 //    formerly known as spcadd
 // --------------------------------------------------------------------
-
 template <typename scalar_t>
-void add_dense_sparse_worker_cpu(Tensor& r, Scalar value, const SparseTensor& sparse, const Tensor& indices, const Tensor& values) {
+void add_dense_sparse_worker_non_hybrid_cpu(Tensor& r, Scalar value, const SparseTensor& sparse, const Tensor& indices, const Tensor& values) {
   auto indices_accessor = indices.accessor<int64_t, 2>();
   auto values_accessor = values.accessor<scalar_t, 1>();
 
   scalar_t* r_ptr = r.data_ptr<scalar_t>();
   scalar_t cast_value = value.to<scalar_t>();
-
+  auto sparse_dim = sparse.sparse_dim();
+  std::vector<int64_t> result_stride(sparse_dim);
+  for (int64_t d = 0; d < sparse_dim; d++) {
+    result_stride[d] = r.stride(d);
+  }
   at::parallel_for(0, sparse._nnz(), 0, [&](int64_t start, int64_t end) {
     for (auto k = start; k < end; k++) {
-      int64_t index = r.storage_offset();
-      for (int64_t d = 0; d < sparse.sparse_dim(); d++) {
-        index += r.stride(d) * indices_accessor[d][k];
+      int64_t index = 0;
+      for (int64_t d = 0; d < sparse_dim; d++) {
+        index += result_stride[d] * indices_accessor[d][k];
       }
       r_ptr[index] += cast_value * values_accessor[k];
     }
   });
 }
 
-Tensor& add_out_dense_sparse_cpu(Tensor& r, const Tensor& dense, const SparseTensor& sparse_, Scalar value) {
+template <typename scalar_t>
+inline void add_dense_sparse_worker_cpu(Tensor& r, Scalar value, const SparseTensor& sparse, const Tensor& indices, const Tensor& values) {
+
+  // Get the dense dimension element numbers of hybrid sparse tensor
+  int64_t values_dense_size = values.stride(0);
+  AT_ASSERT(values.is_contiguous());
+  scalar_t* v_ptr = values.data_ptr<scalar_t>();
+
+  scalar_t* r_ptr = r.data_ptr<scalar_t>();
+  AT_ASSERT(r_ptr != nullptr);
+
+  auto indices_accessor = indices.accessor<int64_t, 2>();
+  scalar_t cast_value = value.to<scalar_t>();
+  auto sparse_dim = sparse.sparse_dim();
+  std::vector<int64_t> result_stride(sparse_dim);
+  for (int64_t d = 0; d < sparse_dim; d++) {
+    result_stride[d] = r.stride(d);
+  }
+
+  at::parallel_for(0, sparse._nnz(), 0, [&](int64_t start, int64_t end) {
+    for (auto k = start; k < end; k++) {
+      auto r_index = r_ptr;
+      for (int64_t d = 0; d < sparse_dim; d++) {
+        r_index += result_stride[d] * indices_accessor[d][k];
+      }
+      auto v_index = v_ptr + k * values_dense_size;
+      PRAGMA_SIMD
+      for (auto v = 0; v < values_dense_size; v++) {
+        r_index[v] += cast_value * v_index[v];
+      }
+    }
+  });
+}
+
+static constexpr unsigned add_dense_sparse_max_lock_num_bits = 14;
+static constexpr unsigned add_dense_ven_len_bits = 4;
+static constexpr unsigned add_dense_ven_len = (1 << add_dense_ven_len_bits);
+static constexpr unsigned pipe4_ven_len = (add_dense_ven_len / 4);
+template <typename scalar_t>
+inline void add_dense_sparse_worker_critical_section_cpu(Tensor& r, Scalar value,
+    const SparseTensor& sparse, const Tensor& indices, const Tensor& values) {
+
+  // Get the dense dimension element numbers of hybrid sparse tensor
+  auto values_dense_size = values.stride(0);
+  AT_ASSERT(values.is_contiguous());
+  scalar_t* v_ptr = values.data_ptr<scalar_t>();
+  AT_ASSERT(v_ptr != nullptr);
+
+  scalar_t* r_ptr = r.data_ptr<scalar_t>();
+  AT_ASSERT(r_ptr != nullptr);
+
+  scalar_t cast_value = value.to<scalar_t>();
+  auto sparse_dim = sparse.sparse_dim();
+
+  int32_t value_size_clz_bits = __builtin_clzll(values_dense_size);
+  auto lock_num_bits = value_size_clz_bits > add_dense_sparse_max_lock_num_bits ?
+                              add_dense_sparse_max_lock_num_bits : value_size_clz_bits;
+  auto lock_nums = (1 << lock_num_bits);
+  auto lock_num_mask = lock_nums - 1;
+  std::vector<std::atomic<bool>> locks(lock_nums);
+  at::parallel_for(0, lock_nums, 64, [&](int64_t start, int64_t end) {
+    PRAGMA_SIMD
+    for (auto i = start; i < end; i++) {
+      locks[i] = false;
+    }
+  });
+  auto indices_accessor = indices.accessor<int64_t, 2>();
+  std::vector<int64_t> result_stride(sparse_dim);
+  for (int64_t d = 0; d < sparse_dim; d++) {
+    result_stride[d] = r.stride(d);
+  }
+  auto n = values_dense_size % add_dense_ven_len;
+  auto values_dense_size0 = values_dense_size >> add_dense_ven_len_bits;
+  auto sparse_nnz = sparse._nnz();
+  at::parallel_for(0, sparse_nnz, 64, [&](int64_t start, int64_t end) {
+    for (auto k = start; k < end; k++) {
+      int64_t r_offset = 0;
+      for (int64_t d = 0; d < sparse_dim; d++) {
+        r_offset += result_stride[d] * indices_accessor[d][k];
+      }
+      auto v_index = v_ptr + k * values_dense_size;
+      auto r_index = r_ptr + r_offset;
+      auto lock_id = (r_offset & lock_num_mask);
+      while (locks.at(lock_id)) {_mm_pause();};
+      while (locks.at(lock_id).exchange(true)) {_mm_pause();};
+      int64_t vb;
+      for(vb = 0; vb < values_dense_size0; vb += add_dense_ven_len) {
+        __attribute__((aligned(32))) scalar_t tmp_values[4 * pipe4_ven_len];
+        std::memcpy((void*)&tmp_values[0],
+                    (void*)&v_index[vb + 0], pipe4_ven_len * sizeof(scalar_t));
+        std::memcpy((void*)&tmp_values[1 * pipe4_ven_len],
+                    (void*)&v_index[vb + 1 * pipe4_ven_len], pipe4_ven_len * sizeof(scalar_t));
+        std::memcpy((void*)&tmp_values[2 * pipe4_ven_len],
+                    (void*)&v_index[vb + 2 * pipe4_ven_len], pipe4_ven_len * sizeof(scalar_t));
+        std::memcpy((void*)&tmp_values[3 * pipe4_ven_len],
+                    (void*)&v_index[vb + 3 * pipe4_ven_len], pipe4_ven_len * sizeof(scalar_t));
+        PRAGMA_SIMD
+        for (int j = 0; j < pipe4_ven_len; j ++ ) {
+          r_index[vb + j] += tmp_values[j] * cast_value;
+        }
+        PRAGMA_SIMD
+        for (int j = 0; j < pipe4_ven_len; j ++ ) {
+          r_index[vb + 1 * pipe4_ven_len + j] += tmp_values[1 * pipe4_ven_len + j] * cast_value;
+        }
+        PRAGMA_SIMD
+        for (int j = 0; j < pipe4_ven_len; j ++ ) {
+          r_index[vb + 2 * pipe4_ven_len + j] += tmp_values[2 * pipe4_ven_len + j] * cast_value;
+        }
+        PRAGMA_SIMD
+        for (int j = 0; j < pipe4_ven_len; j ++ ) {
+          r_index[vb + 3 * pipe4_ven_len + j] += tmp_values[3 * pipe4_ven_len + j] * cast_value;
+        }
+      }
+      if (n > 0) {
+        for(auto vbn = vb; vbn < values_dense_size; vbn++) {
+          r_index[vbn] += cast_value * v_index[vbn];
+        }
+      }
+      locks.at(lock_id) = false;
+    }
+  });
+}
+
+Tensor& add_out_dense_sparse_cpu(Tensor& r, const Tensor& dense, const SparseTensor & sparse_, Scalar value) {
   AT_ASSERT(!r.is_sparse());
   AT_ASSERT(!dense.is_sparse());
   AT_ASSERT(sparse_.is_sparse());
@@ -388,32 +518,57 @@ Tensor& add_out_dense_sparse_cpu(Tensor& r, const Tensor& dense, const SparseTen
     dense.sizes(), " while other has size ", sparse_.sizes(), " (FYI: dense-sparse addition does not currently support broadcasting)");
 
   r.resize_as_(dense);
-  SparseTensor sparse = sparse_.coalesce();
-
-  LongTensor indices = sparse._indices();
-  Tensor values = sparse._values();
-  int64_t nDim = dense.dim();
-  int64_t nDimI = sparse.sparse_dim();
-
   if (!is_same_tensor(r, dense)) r.copy_(dense);
-  if (sparse._nnz() == 0) return r;
 
-  // accessors rely on nnz test
-  if (nDim > nDimI) {
-    auto indices_accessor = indices.accessor<int64_t, 2>();
-    for (int64_t k = 0; k < sparse._nnz(); k++) {
-      Tensor dstBuffer = r;
-      for (int64_t d = 0; d < sparse.sparse_dim(); d++) {
-        dstBuffer = dstBuffer.select(0, indices_accessor[d][k]);
-      }
-      Tensor srcBuffer = values.select(0, k);
-      dstBuffer.add_(srcBuffer, value);
+  auto sparse_nnz = sparse_._nnz();
+  if (sparse_nnz == 0) return r;
+
+  int64_t dense_dim = dense.dim();
+  int64_t sparse_dim = sparse_.sparse_dim();
+  Tensor values = sparse_._values();
+  auto values_type = values.scalar_type();
+  bool sparse_is_coalesced = (sparse_.is_coalesced() || sparse_nnz < 2);
+  bool result_is_contiguous =((r.storage().data() != nullptr) && r.is_contiguous());
+  bool value_is_contiguous =((values.storage().data() != nullptr) && values.is_contiguous());
+  bool is_contiguous =  (result_is_contiguous && value_is_contiguous);
+
+  LongTensor indices;
+  if (is_contiguous && sparse_is_coalesced) {
+    indices = sparse_._indices();
+    if (sparse_dim == dense_dim) {
+      AT_DISPATCH_ALL_TYPES(
+          values_type, "add_dense_sparse_non_hybrid", [&] {
+            add_dense_sparse_worker_non_hybrid_cpu<scalar_t>(r, value, sparse_, indices, values);
+          });
+    } else {
+      AT_DISPATCH_ALL_TYPES(
+          values_type, "add_dense_sparse_hybrid", [&] {
+            add_dense_sparse_worker_cpu<scalar_t>(r, value, sparse_, indices, values);
+          });
     }
-  } else {
+  } else if (is_contiguous) {
+    // Handle sparse is not coalesced
+    indices = sparse_._indices();
     AT_DISPATCH_ALL_TYPES(
-        values.scalar_type(), "add_dense_sparse", [&] {
-          add_dense_sparse_worker_cpu<scalar_t>(r, value, sparse, indices, values);
+        values_type, "add_dense_sparse_critical_section", [&] {
+          add_dense_sparse_worker_critical_section_cpu<scalar_t>(r, value, sparse_, indices, values);
         });
+  } else {
+    // Slow path for non-contiguous values and output
+    SparseTensor sparse = sparse_.coalesce();
+    indices = sparse._indices();
+    values = sparse._values();
+    auto indices_accessor = indices.accessor<int64_t, 2>();
+    at::parallel_for(0, sparse._nnz(), 1000, [&](int64_t start, int64_t end) {
+      for (auto k = start; k < end; k++) {
+        Tensor dstBuffer = r;
+        for (int64_t d = 0; d < sparse_dim; d++) {
+          dstBuffer = dstBuffer.select(0, indices_accessor[d][k]);
+        }
+        Tensor srcBuffer = values.select(0, k);
+        dstBuffer.add_(srcBuffer, value);
+      }
+    });
   }
   return r;
 }
