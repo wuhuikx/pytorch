@@ -115,6 +115,9 @@
   scalar_check:
     output: 'false'
     grad_input: 'false'
+  CPU:
+    forward_scalar_types: ['Float', 'Double', 'BFloat16']
+    backward_scalar_types: ['Float', 'Double', 'BFloat16']
 
 # Convolutions
 

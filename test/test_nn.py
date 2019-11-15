@@ -4282,6 +4282,20 @@ class TestNN(NNTestCase):
             self.assertEqual(len(w), 1)
             self.assertIn('Please ensure they have the same size.', str(w[0]))
 
+    def test_mse_loss_bfloat16(self):
+        i = torch.randn((10, 1), dtype=torch.float, requires_grad=True)
+        t = torch.randn((10, 1), dtype=torch.float)
+        i_b = i.detach().to(torch.bfloat16).requires_grad_(True)
+        t_b = t.to(torch.bfloat16)
+        outputf = F.mse_loss(i, t)
+        output = F.mse_loss(i_b, t_b)
+        self.assertEqual(output.dtype, torch.bfloat16)
+        self.assertEqual(output, outputf, prec=1e-02)
+        outputf.sum().backward()
+        output.sum().backward()
+        self.assertEqual(i_b.grad.dtype, torch.bfloat16)
+        self.assertEqual(i_b.grad, i.grad, prec=1e-02)
+
     def test_nll_loss_mismatched_batch(self):
         x = torch.randn((10, 3), requires_grad=True)
         # t should have size (10,)
@@ -7962,6 +7976,10 @@ class TestNNInit(TestCase):
             init.uniform_(input_tensor, a=a, b=b)
             assert self._is_uniform(input_tensor, a, b)
 
+            #bfloat16
+            init.uniform_(input_tensor.to(torch.bfloat16), a=a, b=b)
+            assert self._is_uniform(input_tensor, a, b)
+
     @unittest.skipIf(not TEST_SCIPY, "Scipy not found.")
     def test_normal(self):
         for dims in [1, 2, 4]:
@@ -8778,6 +8796,19 @@ class TestNNDeviceType(NNTestCase):
         output.sum().backward()
         self.assertEqual(output.type(), input.type())
 
+    def test_LayerNorm_cpu_bfloat16(self, device="cpu", dtype=torch.bfloat16):
+        inputf = torch.empty(2, 3, 3, 2, device="cpu", dtype=torch.float).random_(1, 10).requires_grad_(True)
+        input = inputf.detach().to(dtype).requires_grad_(True)
+        m = nn.LayerNorm([3, 2]).to("cpu", torch.float)
+        outputf = m(inputf)
+        output = m(input)
+        outputf.sum().backward()
+        output.sum().backward()
+        self.assertEqual(output.type(), input.type())
+        self.assertEqual(output, outputf, prec=0.01)
+        self.assertEqual(input.grad.dtype, dtype)
+        self.assertEqual(input.grad, inputf.grad)
+
     def _test_GroupNorm_general(self, device, dtype=torch.float):
         good_shape_g = {
             (1, 2, 3, 4): 2,
@@ -9466,6 +9497,20 @@ class TestNNDeviceType(NNTestCase):
         outf.backward(gO)
         # should be bitwise equal
         self.assertEqual(input.grad, inputf.grad.to(dtype), prec=0)
+
+    def test_softmax_cpu_bfloat16(self, device="cpu", dtype=torch.bfloat16):
+        inputf = torch.rand(3200, 16000, device="cpu", dtype=torch.float, requires_grad=True)
+        input = inputf.detach().to(dtype).requires_grad_(True)
+        outf = F.softmax(inputf, dim=-1)
+        out = F.softmax(input, dim=-1)
+        self.assertEqual(out.dtype, dtype)
+        self.assertEqual(out, outf)
+        gO = torch.empty_like(outf).uniform_()
+        outf.backward(gO)
+        out.backward(gO.to(dtype))
+        self.assertEqual(input.grad.dtype, dtype)
+        self.assertEqual(input.grad, inputf.grad)
+
 
     @onlyCUDA
     def test_pool3d_size_one_feature_dim(self, device):
