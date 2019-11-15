@@ -29,6 +29,8 @@ void THTensor_(random)(THTensor *self, at::Generator *_generator)
   TH_TENSOR_APPLY(scalar_t, self, *self_data = (uint64_t)(gen->random64() % (LONG_MAX + 1ULL)););
 #elif defined(TH_REAL_IS_FLOAT)
   TH_TENSOR_APPLY(scalar_t, self, *self_data = (float)(gen->random() % ((1ULL << FLT_MANT_DIG) + 1)););
+#elif defined(TH_REAL_IS_BFLOAT16)
+  TH_TENSOR_APPLY(scalar_t, self, *self_data = (at::BFloat16)(gen->random() % ((1ULL << 8) + 1)););
 #elif defined(TH_REAL_IS_DOUBLE)
   TH_TENSOR_APPLY(scalar_t, self, *self_data = (double)(gen->random64() % ((1ULL << DBL_MANT_DIG) + 1)););
 #elif defined(TH_REAL_IS_BOOL)
@@ -68,13 +70,7 @@ void THTensor_(geometric)(THTensor *self, double p, at::Generator *_generator)
   TH_TENSOR_APPLY(scalar_t, self, *self_data = (scalar_t)geometric(gen););
 }
 
-#if defined(TH_REAL_IS_FLOAT) || defined(TH_REAL_IS_DOUBLE)
-
-#if defined(TH_REAL_IS_FLOAT)
-#define TH_REAL_MIN FLT_MIN
-#elif defined(TH_REAL_IS_DOUBLE)
-#define TH_REAL_MIN DBL_MIN
-#endif
+#if defined(TH_REAL_IS_FLOAT) || defined(TH_REAL_IS_DOUBLE) || defined(TH_REAL_IS_BFLOAT16)
 
 void THTensor_(uniform)(THTensor *self, double a, double b, at::Generator *_generator)
 {
@@ -82,7 +78,7 @@ void THTensor_(uniform)(THTensor *self, double a, double b, at::Generator *_gene
   // See Note [Acquire lock when using random generators]
   std::lock_guard<std::mutex> lock(gen->mutex_);
 
-  #if defined(TH_REAL_IS_FLOAT)
+  #if defined(TH_REAL_IS_FLOAT) || defined(TH_REAL_IS_BFLOAT16)
   at::uniform_real_distribution<float> uniform((float)a, (float)b);
   TH_TENSOR_APPLY(scalar_t, self, *self_data = (scalar_t)uniform(gen););
   #else
@@ -91,6 +87,7 @@ void THTensor_(uniform)(THTensor *self, double a, double b, at::Generator *_gene
   #endif
 }
 
+#if !defined(TH_REAL_IS_BFLOAT16) /* non bfloat16 part*/
 void THTensor_(normal)(THTensor *self, double mean, double stddev, at::Generator *_generator)
 {
   const int64_t size = THTensor_(numel)(self);
@@ -139,8 +136,6 @@ void THTensor_(exponential)(THTensor *self, double lambda, at::Generator *_gener
   at::exponential_distribution<double> exponential(lambda);
   TH_TENSOR_APPLY(scalar_t, self, *self_data = (scalar_t)exponential(gen););
 }
-
-#undef TH_REAL_MIN
 
 void THTensor_(cauchy)(THTensor *self, double median, double sigma, at::Generator *_generator)
 {
@@ -286,6 +281,7 @@ void THTensor_(multinomialAliasDraw)(THLongTensor *self, THTensor *q, THLongTens
       THLongTensor_fastSet1d(self, i, sample_idx);
     }
 }
+#endif
 #endif
 
 #if defined(TH_REAL_IS_BYTE)

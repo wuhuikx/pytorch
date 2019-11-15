@@ -93,3 +93,7 @@
 
 #include <THNN/generic/Tanh.c>
 #include <TH/THGenerateFloatTypes.h>
+
+#include <THNN/generic/Tanh.c>
+#include <TH/THGenerateBFloat16Type.h>
+
