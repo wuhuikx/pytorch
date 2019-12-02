@@ -83,7 +83,7 @@ void cpu_index_kernel(TensorIterator& iter, IntArrayRef index_size, IntArrayRef 
   if (serial_execution) {
     iter.serial_for_each(loop, {0, iter.numel()});
   } else {
-    iter.for_each(loop, 1024);
+    iter.for_each(loop, 4096);
   }
 }
 
@@ -99,7 +99,8 @@ void index_put_kernel(TensorIterator& iter, IntArrayRef index_size, IntArrayRef 
   // NOTE: duplicate indices are only supported if accumulate is true.
   AT_DISPATCH_ALL_TYPES_AND3(at::ScalarType::Half, at::ScalarType::Bool, at::ScalarType::BFloat16, iter.dtype(), "index_put", [&] {
     if (accumulate) {
-      if (iter.dtype() == at::ScalarType::Float) {
+      bool use_parallel_for = ((iter.numel() >= internal::GRAIN_SIZE) && (at::get_num_threads() > 1));
+      if (iter.dtype() == at::ScalarType::Float && use_parallel_for) {
         cpu_index_kernel<float>(iter, index_size, index_stride, [](char* dst, char* src, int64_t offset) {
           {
             cpu_atomic_add_float((float*)(dst + offset), *(float*)src);
