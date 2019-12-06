@@ -9,8 +9,8 @@
   # to generate backward and forward methods
   # If not specified, ['Float', 'Double', 'Half'] will be used
   CPU:
-    forward_scalar_types: ['Float', 'Double', 'Half']
-    backward_scalar_types: ['Float', 'Double', 'Half']
+    forward_scalar_types: ['Float', 'Double', 'Half', 'BFloat16']
+    backward_scalar_types: ['Float', 'Double', 'Half', 'BFloat16']
   CUDA:
     forward_scalar_types: ['Float', 'Double', 'Half']
     backward_scalar_types: ['Float', 'Double', 'Half']
@@ -109,6 +109,9 @@
   scalar_check:
     output: 'false'
     grad_input: 'false'
+  CPU:
+    forward_scalar_types: ['Float', 'Double', 'Half']
+    backward_scalar_types: ['Float', 'Double', 'Half']
 
 - name: _thnn_tanh(Tensor self)
   cname: Tanh
