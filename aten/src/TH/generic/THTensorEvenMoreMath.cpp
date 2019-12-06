@@ -724,9 +724,11 @@ void THTensor_(scatterAdd)(THTensor *tensor, int dim, THLongTensor *index, THTen
                          tensor_data[idx * tensor_stride] += *(src_data + i*src_stride);
                        })
 }
+#endif
 
 #if !defined(TH_REAL_IS_BOOL)
 
+#if !defined(TH_REAL_IS_BFLOAT16) /* non bfloat16 part*/
 accreal THTensor_(dot)(THTensor *tensor, THTensor *src)
 {
 #ifdef BUILD_NAMEDTENSOR
