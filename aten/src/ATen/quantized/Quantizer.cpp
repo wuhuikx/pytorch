@@ -125,10 +125,37 @@ Tensor quantize_tensor(Tensor rtensor, Tensor qtensor, double scale, int64_t zer
   qparams.scale = scale;
   qparams.zero_point = zero_point;
   qparams.precision = CHAR_BIT * sizeof(typename T::underlying);
-  fbgemm::Quantize<typename T::underlying>(/*src=*/rd,
-                             /*dst=*/qd,
-                             /*len=*/rtensor.numel(),
-                             /*qparams=*/qparams);
+
+  size_t len = rtensor.numel();
+  float rscale = 1 / scale;
+  std::int32_t min = std::is_signed<typename T::underlying>::value ? -128/*-(1LL << (qparams.precision - 1))*/ : 0;
+  std::int32_t max =
+      std::is_signed<typename T::underlying>::value ? 127 : 255;//((1LL << (qparams.precision - 1)) - 1) : (1LL << qparams.precision) - 1;
+ 
+  assert(min >= std::numeric_limits<std::int64_t>::lowest());
+  assert(min >= std::numeric_limits<typename T::underlying>::lowest());
+  assert(max <= std::numeric_limits<std::int64_t>::max());
+  assert(max <= std::numeric_limits<typename T::underlying>::max());
+  #pragma omp parallel for
+  for (std::size_t i = 0; i < len; i++) {
+      const float transformed_val = zero_point + rd[i] * rscale;
+      qd[i] = std::min<std::int64_t>(std::max<std::int64_t>(static_cast<std::int64_t>(std::nearbyint(transformed_val)), min), max);
+  }
+
+  /*#pragma omp parallel for
+  for (std::size_t i = 0; i < len; i++) {
+      const float transformed_val = zero_point + rd[i] / scale;
+      qd[i] = fbgemm::clamp<std::int64_t, typename T::underlying>(
+              static_cast<std::int64_t>(std::nearbyint(zero_point + rd[i] * rscale)),
+              qparams.precision,
+              std::is_signed<typename T::underlying>::value);
+  }*/
+
+   
+  //fbgemm::Quantize<typename T::underlying>(/*src=*/rd,
+  //                           /*dst=*/qd,
+  //                           /*len=*/rtensor.numel(),
+  //                           /*qparams=*/qparams);
   return qtensor;
 }
 
@@ -153,10 +180,15 @@ Tensor dequantize_tensor(Tensor qtensor, Tensor rtensor, double scale, int64_t z
   qparams.zero_point = zero_point;
   qparams.precision = CHAR_BIT * sizeof(typename T::underlying);
   float* rd = rtensor.data_ptr<float>();
-  fbgemm::Dequantize<typename T::underlying>(/*src=*/qd,
-                              /*dst=*/rd,
-                              /*len=*/qtensor.numel(),
-                              /*qparams=*/qparams);
+ //fbgemm::Dequantize<typename T::underlying>(/*src=*/qd,
+ //                             /*dst=*/rd,
+ //                             /*len=*/qtensor.numel(),
+ //                             /*qparams=*/qparams);
+  size_t len = qtensor.numel();
+  #pragma omp parallel for
+  for (std::size_t i = 0; i < len; i++) {
+      rd[i] = qparams.scale * ( qd[i] - qparams.zero_point);
+  }
   return rtensor;
 }
 #else  // USE_FBGEMM

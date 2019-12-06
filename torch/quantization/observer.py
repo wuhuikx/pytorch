@@ -870,7 +870,7 @@ class NoopObserver(ObserverBase):
 
 
 # Restrict activations to be in the range (0,127)
-default_observer = MinMaxObserver.with_args(reduce_range=True)
+default_observer = MinMaxObserver.with_args(reduce_range=False)
 default_debug_observer = RecordingObserver
 default_weight_observer = MinMaxObserver.with_args(dtype=torch.qint8, qscheme=torch.per_tensor_symmetric)
 default_histogram_observer = HistogramObserver.with_args(reduce_range=True)
