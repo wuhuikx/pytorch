@@ -24,6 +24,7 @@ TH_API void THNN_(BCECriterion_updateGradInput)(
           int64_t reduction,
           THTensor *weights);          // [OPTIONAL]
 
+#if !defined(TH_REAL_IS_BFLOAT16)
 TH_API void THNN_(ELU_updateOutput)(
           THNNState *state,            // library's state
           THTensor *input,             // input tensor
@@ -157,6 +158,7 @@ TH_API void THNN_(SoftShrink_updateGradInput)(
           THTensor *gradOutput,
           THTensor *gradInput,
           accreal lambda);
+#endif
 
 TH_API void THNN_(Tanh_updateOutput)(
           THNNState *state,
