@@ -2,6 +2,8 @@
 #define TH_GENERIC_FILE "THNN/generic/BCECriterion.c"
 #else
 
+#include <ATen/AccumulateType.h>
+
 #define EPS 1e-12
 
 static inline scalar_t safe_log(scalar_t a) {
@@ -38,8 +40,8 @@ void THNN_(BCECriterion_updateOutput)(
     return;
   }
 
-        THTensor_(resize0d)(output);
-  scalar_t sum = 0;
+  THTensor_(resize0d)(output);
+  at::acc_type<scalar_t, false> sum = 0;
 
   if (weights) {
     TH_TENSOR_APPLY3(scalar_t, input, scalar_t, target, scalar_t, weights,
