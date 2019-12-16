@@ -417,6 +417,8 @@ Tensor _embedding_bag_sparse_backward_cpu_sum_fast(
   float* grad_data = grad_.data_ptr<float>();
   auto grad_stride0 = grad_.stride(0);
 
+  auto n = ddim % 32;
+  int64_t aligned_dim = ((ddim >> 5) << 5);
   at::parallel_for(0, offset_numel, 64, [&](int64_t start, int64_t end) {
     for(auto mb = start; mb < end; mb++) {
       int64_t select_off_start = offsets_accessor[mb];
@@ -425,10 +427,9 @@ Tensor _embedding_bag_sparse_backward_cpu_sum_fast(
       auto grad_block = grad_data + grad_offset;
       for(auto s = select_off_start; s < select_off_end; s++) {
         auto gradout_block = gradout_data + ddim * s;
-        auto n = ddim % 32;
         int64_t v;
-        for (v = 0; v < (ddim >> 5); v += 32) {
-          __attribute__((aligned(32))) float tmp_values[4][8];
+        for (v = 0; v < aligned_dim; v += 32) {
+          float tmp_values[4][8];
           std::memcpy((void*)&tmp_values[0][0], (void*)&grad_block[v + 0], 8 * sizeof(float));
           std::memcpy((void*)&tmp_values[1][0], (void*)&grad_block[v + 8], 8 * sizeof(float));
           std::memcpy((void*)&tmp_values[2][0], (void*)&grad_block[v + 16], 8 * sizeof(float));
