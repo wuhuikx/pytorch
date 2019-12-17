@@ -21,6 +21,26 @@ std::vector<int64_t> conv_output_size(
   return output_size;
 }
 
+std::vector<int64_t> conv_input_size(
+    IntArrayRef output_size,
+    IntArrayRef kernel_size,
+    IntArrayRef padding,
+    IntArrayRef output_padding,
+    IntArrayRef stride,
+    IntArrayRef dilation,
+    int64_t groups) {
+  auto dim = output_size.size();
+  std::vector<int64_t> input_size(dim);
+  input_size[0] = output_size[0];
+  input_size[1] = kernel_size[0] * groups;
+  for (size_t d = 2; d < dim; ++d) {
+    auto kernel = dilation[d - 2] * (kernel_size[d] - 1) + 1;
+    input_size[d] = (output_size[d] - 1) * stride[d - 2] - (2 * padding[d - 2])
+                     + kernel + output_padding[d - 2];
+  }
+  return input_size;            
+}
+
 std::vector<int64_t> pool_output_sizes(
     IntArrayRef input_size,
     IntArrayRef kernel_size,
