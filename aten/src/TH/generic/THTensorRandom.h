@@ -12,10 +12,10 @@ TH_API void THTensor_(geometric)(THTensor *self, double p, at::Generator *_gener
 
 #if defined(TH_REAL_IS_FLOAT) || defined(TH_REAL_IS_DOUBLE) || defined(TH_REAL_IS_BFLOAT16)
 TH_API void THTensor_(uniform)(THTensor *self, double a, double b, at::Generator *_generator);
+TH_API void THTensor_(normal)(THTensor *self, double mean, double stdv, at::Generator *_generator);
 
 #if !defined(TH_REAL_IS_BFLOAT16)
 TH_API void THTensor_(bernoulli_Tensor)(THTensor *self, at::Generator *_generator, THTensor *p);
-TH_API void THTensor_(normal)(THTensor *self, double mean, double stdv, at::Generator *_generator);
 TH_API void THTensor_(normal_means)(THTensor *self, THTensor *means, double stddev, at::Generator *gen);
 TH_API void THTensor_(normal_stddevs)(THTensor *self, double mean, THTensor *stddevs, at::Generator *gen);
 TH_API void THTensor_(normal_means_stddevs)(THTensor *self, THTensor *means, THTensor *stddevs, at::Generator *gen);
