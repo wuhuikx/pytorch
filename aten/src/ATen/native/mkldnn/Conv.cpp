@@ -48,28 +48,16 @@ ideep::tensor _mkldnn_conv2d(
     IntArrayRef dilation,
     int64_t groups) {
 
-  std::vector<int64_t> kernel_size(x.ndims());
-  // mkldnn conv2d weights could have been re-ordered to 5d by
-  // mkldnn_reorder_conv2d_weight
-  if (w.ndims() == x.ndims() + 1) {
-    TORCH_CHECK(
-        groups > 1,
-        "Only group _mkldnn_conv2d weights could have been reordered to 5d");
-    kernel_size[0] = w.get_dim(0) * w.get_dim(1);
-    std::copy_n(
-        w.get_dims().cbegin() + 2, x.ndims() - 1, kernel_size.begin() + 1);
-  } else {
-    std::copy_n(w.get_dims().cbegin(), x.ndims(), kernel_size.begin());
-  }
+  auto kernel_size = w.get_dims();
 
-  const ideep::param::dims x_dims = x.get_dims();
+  auto x_dims = x.get_dims();
   std::vector<int64_t> input_size{x_dims.cbegin(), x_dims.cend()};
   std::vector<int64_t> output_sizes =
       conv_output_size(input_size, kernel_size, padding, stride, dilation);
 
   ideep::tensor y;
   if (b.has_value()) {
-    ideep::convolution_forward::compute<AllocForMKLDNN>(
+    ideep::convolution_forward::compute(
         x,
         w,
         b.value(),
@@ -79,24 +67,18 @@ ideep::tensor _mkldnn_conv2d(
         {dilation.begin(), dilation.end()},
         {padding.begin(), padding.end()},
         {padding.begin(), padding.end()},
-        groups,
-        ideep::descriptor_group::attr_t{},
-        ideep::algorithm::convolution_direct,
-        ideep::prop_kind::forward);
+        groups);
   } else {
-    ideep::convolution_forward::compute<AllocForMKLDNN>(
-      x,
-      w,
-      {output_sizes.cbegin(), output_sizes.cend()},
-      y,
-      {stride.begin(), stride.end()},
-      {dilation.begin(), dilation.end()},
-      {padding.begin(), padding.end()},
-      {padding.begin(), padding.end()},
-      groups,
-      ideep::descriptor_group::attr_t{},
-      ideep::algorithm::convolution_direct,
-      ideep::prop_kind::forward);
+    ideep::convolution_forward::compute(
+        x,
+        w,
+        {output_sizes.cbegin(), output_sizes.cend()},
+        y,
+        {stride.begin(), stride.end()},
+        {dilation.begin(), dilation.end()},
+        {padding.begin(), padding.end()},
+        {padding.begin(), padding.end()},
+        groups);
   }
   return y;
 }
@@ -111,7 +93,7 @@ ideep::tensor _mkldnn_conv2d_backward_input(
     int64_t groups) {
 
   ideep::tensor gradx;
-  ideep::convolution_backward_data::compute<AllocForMKLDNN>(
+  ideep::convolution_backward_data::compute(
       grady,
       w,
       {input_sizes.cbegin(), input_sizes.cend()},
@@ -138,7 +120,7 @@ std::tuple<ideep::tensor, ideep::tensor> _mkldnn_conv2d_backward_weights(
 
   ideep::tensor gradw, gradb;
   if (bias_defined) {
-    ideep::convolution_backward_weights::compute<AllocForMKLDNN>(
+    ideep::convolution_backward_weights::compute(
         x,
         grady,
         {weight_sizes.cbegin(), weight_sizes.cend()},
@@ -151,7 +133,7 @@ std::tuple<ideep::tensor, ideep::tensor> _mkldnn_conv2d_backward_weights(
         groups,
         ideep::algorithm::convolution_direct);
   } else {
-    ideep::convolution_backward_weights::compute<AllocForMKLDNN>(
+    ideep::convolution_backward_weights::compute(
         x,
         grady,
         {weight_sizes.cbegin(), weight_sizes.cend()},
@@ -164,7 +146,7 @@ std::tuple<ideep::tensor, ideep::tensor> _mkldnn_conv2d_backward_weights(
         ideep::algorithm::convolution_direct);
   }
 
-  return std::tuple<ideep::tensor, ideep::tensor>{gradw, gradb};
+  return std::make_tuple(gradw, gradb);
 }
 
 Tensor mkldnn_convolution(
@@ -269,7 +251,7 @@ std::tuple<Tensor,Tensor,Tensor> mkldnn_convolution_backward(
         weight, grad_output, input, padding, stride, dilation, groups, output_mask[2]);
   }
 
-  return std::tuple<Tensor, Tensor, Tensor>{grad_input, grad_weight, grad_bias};
+  return std::make_tuple(grad_input, grad_weight, grad_bias);
 }
 
 }}  // namespace at::native

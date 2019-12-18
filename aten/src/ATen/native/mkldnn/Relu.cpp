@@ -30,14 +30,14 @@ namespace at { namespace native {
 Tensor mkldnn_relu(const Tensor& input) {
   const ideep::tensor& x = itensor_from_mkldnn(input);
   ideep::tensor y;
-  ideep::eltwise_forward::compute<AllocForMKLDNN>(
+  ideep::eltwise_forward::compute(
       x, y, ideep::algorithm::eltwise_relu, ideep::prop_kind::forward_training, /*alpha*/ 0.0);
   return new_with_itensor_mkldnn(std::move(y), input.options());
 }
 
 Tensor& mkldnn_relu_(Tensor& input) {
   ideep::tensor& x = itensor_from_mkldnn(input);
-  ideep::eltwise_forward::compute<AllocForMKLDNN>(
+  ideep::eltwise_forward::compute(
       x, x, ideep::algorithm::eltwise_relu, ideep::prop_kind::forward_training, /*alpha*/ 0.0);
   return input;
 }
@@ -46,7 +46,7 @@ Tensor mkldnn_relu_backward(const Tensor& grad_output, const Tensor& input) {
   ideep::tensor& x = itensor_from_mkldnn(input);
   ideep::tensor grady = itensor_from_mkldnn(grad_output);
   ideep::tensor gradx;
-  ideep::eltwise_backward::compute<AllocForMKLDNN>(x, grady, gradx,
+  ideep::eltwise_backward::compute(x, grady, gradx,
       ideep::algorithm::eltwise_relu, /*alpha*/ 0.0);
   return new_with_itensor_mkldnn(std::move(gradx), grad_output.options());
 }

@@ -19,13 +19,14 @@ Tensor mkldnn_to_dense(const Tensor& mkldnn_tensor, c10::optional<ScalarType> dt
   Tensor cpu_tensor = at::empty(
     std::vector<int64_t>(dims.begin(), dims.end()),
     mkldnn_tensor.options().layout(c10::kStrided).dtype(data_type));
-  if (!stensor.is_empty()) {
-    if (cpu_tensor.scalar_type() == ScalarType::Float) {
-      stensor.to_public(cpu_tensor.template data_ptr<float>(), get_mkldnn_dtype(data_type));
-    } else {
-      stensor.to_public(cpu_tensor.template data_ptr<BFloat16>(), get_mkldnn_dtype(data_type));
-    }
-  }
+  if (stensor.is_empty()) return cpu_tensor;
+  auto pub_tensor =
+      cpu_tensor.scalar_type() == ScalarType::Float
+          ? stensor.to_public(cpu_tensor.template data_ptr<float>(),
+                              get_mkldnn_dtype(data_type))
+          : stensor.to_public(cpu_tensor.template data_ptr<BFloat16>(),
+                              get_mkldnn_dtype(data_type));
+  cpu_tensor.as_strided_(dims, pub_tensor.get_strides());
   return cpu_tensor;
 }
 
@@ -74,10 +75,9 @@ Tensor mkldnn_reorder_conv2d_weight(
   auto padding_vec = expand_param_if_needed(padding, "padding", 2);
   auto dilation_vec = expand_param_if_needed(dilation, "dilation", 2);
 
-  ideep::tensor w = itensor_from_mkldnn(self).as_weights();
-  w.make_group(groups);
-  ideep::tensor::descriptor desc =
-      ideep::convolution_forward::expected_weights_descriptor(
+  auto w = itensor_from_mkldnn(self);
+  auto desc =
+      ideep::convolution_forward::expected_weights_desc(
           w.get_dims(),
           w.get_data_type(),
           {stride_vec.cbegin(), stride_vec.cend()},
@@ -87,7 +87,7 @@ Tensor mkldnn_reorder_conv2d_weight(
           groups,
           ideep::algorithm::convolution_direct);
   ideep::tensor result;
-  result.init<AllocForMKLDNN>(desc);
+  result.init(desc);
   result.feed_from(w);
 
   return new_with_itensor_mkldnn(std::move(result), self.options());

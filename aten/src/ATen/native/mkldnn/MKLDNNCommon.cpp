@@ -92,12 +92,12 @@ ideep::tensor itensor_view_from_dense(const Tensor& tensor) {
       "itensor_view_from_dense: should not be a variable");
   TORCH_INTERNAL_ASSERT(at::impl::variable_excluded_from_dispatch());
   if (tensor.scalar_type() == ScalarType::Float) {
-    return {{{tensor.sizes().cbegin(), tensor.sizes().cend()},
-             get_mkldnn_dtype(tensor.scalar_type())},
+    return {tensor.sizes().vec(),
+            get_mkldnn_dtype(tensor.scalar_type()),
             tensor.template data_ptr<float>()};
   } else {
-    return {{{tensor.sizes().cbegin(), tensor.sizes().cend()},
-             get_mkldnn_dtype(tensor.scalar_type())},
+    return {tensor.sizes().vec(),
+            get_mkldnn_dtype(tensor.scalar_type()),
             tensor.template data_ptr<BFloat16>()};
   }
 }

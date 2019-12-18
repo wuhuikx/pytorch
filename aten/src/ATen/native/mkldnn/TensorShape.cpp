@@ -75,9 +75,9 @@ Tensor mkldnn_reshape(const Tensor& self, IntArrayRef size) {
   if (self.sizes() == inferred_size) {
     return self;
   }
-  const ideep::tensor& x = itensor_from_mkldnn(self);
-  ideep::tensor y{x};
-  y.reshape<AllocForMKLDNN>({inferred_size.cbegin(), inferred_size.cend()});
+  auto& x = itensor_from_mkldnn(self);
+  auto y = x;
+  y.reshape(inferred_size);
   return new_with_itensor_mkldnn(std::move(y), self.options());
 }
 
@@ -88,7 +88,7 @@ Tensor mkldnn_clone(const Tensor& self, c10::optional<c10::MemoryFormat> optiona
       optional_memory_format.value());
   ideep::tensor& src = itensor_from_mkldnn(self);
   ideep::tensor dst;
-  ideep::direct_copy::compute<AllocForMKLDNN>(src, dst);
+  ideep::direct_copy::compute(src, dst);
   return new_with_itensor_mkldnn(std::move(dst), self.options());
 }
 
@@ -98,7 +98,7 @@ Tensor mkldnn_transpose(const Tensor & self, int64_t dim0, int64_t dim1) {
   std::vector<int> axes(x.ndims());
   std::iota(axes.begin(), axes.end(), 0);
   std::swap(axes[dim0], axes[dim1]);
-  y.transpose_from<AllocForMKLDNN>(x, axes);
+  y.transpose_from(x, axes);
   return new_with_itensor_mkldnn(std::move(y), self.options());
 }
 
