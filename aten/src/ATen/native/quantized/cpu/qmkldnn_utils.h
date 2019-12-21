@@ -10,8 +10,8 @@
 struct FBGEMM_API PackedWeightQmkldnn {
   std::unique_ptr<ideep::tensor> w;
   c10::optional<at::Tensor> bias;
-  std::vector<double> w_scale;
-  std::vector<int64_t> w_zp;
+  std::vector<float> w_scale;
+  std::vector<int32_t> w_zp;
   c10::QScheme q_scheme;
 };
 
@@ -38,23 +38,23 @@ static at::Tensor mkldnn_linear_prepack(
   }
 
 
-  std::vector<int64_t> weight_zero_points(1, 0);
+  std::vector<int32_t> weight_zero_points(1, 0);
   if (qtype == c10::kPerTensorAffine) {
-    weight_zero_points[0] = weight_contig.q_zero_point();
+    weight_zero_points[0] = static_cast<int32_t>(weight_contig.q_zero_point());
   } else if (qtype == c10::kPerChannelAffine) {
     weight_zero_points.resize(N, 0);
     for (int i = 0; i < N; ++i) {
       weight_zero_points[i] =
-          weight.q_per_channel_zero_points()[i].item<int64_t>();
+          weight.q_per_channel_zero_points()[i].item<int32_t>();
     }
   }
-  std::vector<double> weight_scales(1, 0.0);
+  std::vector<float> weight_scales(1, 0.0);
   if (qtype == c10::kPerTensorAffine) {
     weight_scales[0] = weight.q_scale();
   } else if (qtype == c10::kPerChannelAffine) {
     weight_scales.resize(N, 0.0);
     for (int i = 0; i < N; ++i) {
-      weight_scales[i] = weight.q_per_channel_scales()[i].item<double>();
+      weight_scales[i] = weight.q_per_channel_scales()[i].item<float>();
     }
   }
 
@@ -64,13 +64,13 @@ static at::Tensor mkldnn_linear_prepack(
   weight_.init(
       weight_contig.sizes().vec(), ideep::tensor::data_type::s8, weight_ptr);
   weight_.set_scale(scale_);
-  ideep::tensor::descriptor desc =
+  auto desc =
       ideep::inner_product_forward::expected_weights_desc(
           weight_.get_dims(),
           ideep::tensor::data_type::s8,
           ideep::tensor::data_type::u8);
   ideep::tensor output;
-  if (weight_.get_descriptor() != desc) {
+  if (weight_.get_desc() != desc) {
     output.init(desc);
     output.set_scale(scale_);
     output.feed_from(weight_);
@@ -111,9 +111,9 @@ static std::tuple<at::Tensor, c10::optional<at::Tensor>> mkldnn_linear_unpack(
     auto scales = at::from_blob(
         w_scale.data(),
         w_scale.size(),
-        device(c10::kCPU).dtype(c10::kDouble));
+        device(c10::kCPU).dtype(c10::kFloat));
     auto zero_points = at::from_blob(
-        w_zp.data(), w_zp.size(), device(c10::kCPU).dtype(c10::kLong));
+        w_zp.data(), w_zp.size(), device(c10::kCPU).dtype(c10::kInt));
 
     weight_origin = at::_empty_per_channel_affine_quantized(
         {N, K},
@@ -154,9 +154,9 @@ static at::Tensor mkldnn_conv_prepack(
 
   auto weight_contig = weight.contiguous();
 
-  std::vector<int64_t> zero_points(1, 0);
+  std::vector<int32_t> zero_points;
   if (qtype == c10::kPerTensorAffine) {
-    zero_points[0] = weight_contig.q_zero_point();
+    zero_points = {static_cast<int32_t>(weight_contig.q_zero_point())};
   } else if (qtype == c10::kPerChannelAffine) {
     int64_t axis = weight_contig.q_per_channel_axis();
     TORCH_CHECK(
@@ -164,19 +164,19 @@ static at::Tensor mkldnn_conv_prepack(
         "Only per output channel quantization is supported for the weights");
     zero_points.resize(output_channels);
     for (int i = 0; i < output_channels; ++i) {
-      zero_points[i] = weight_contig.q_per_channel_zero_points()[i].item<int64_t>();
+      zero_points[i] = weight_contig.q_per_channel_zero_points()[i].item<int32_t>();
     }
   } else {
     TORCH_CHECK(false, "Unsupported qscheme: ", toString(qtype));
   }
 
-  std::vector<double> scales(1, 0.0);
+  std::vector<float> scales;
   if (qtype == c10::kPerTensorAffine) {
-    scales[0] = weight_contig.q_scale();
+    scales = {static_cast<float>(weight_contig.q_scale())};
   } else if (qtype == c10::kPerChannelAffine) {
     scales.resize(output_channels);
     for (int i = 0; i < output_channels; ++i) {
-      scales[i] = weight_contig.q_per_channel_scales()[i].item<double>();
+      scales[i] = weight_contig.q_per_channel_scales()[i].item<float>();
     }
   }
 
@@ -201,7 +201,7 @@ static at::Tensor mkldnn_conv_prepack(
       weight_contig.sizes().vec(), ideep::tensor::data_type::s8, weight_ptr);
   weight_.set_scale(scale_);
 
-  ideep::tensor::descriptor desc =
+  auto desc =
       ideep::convolution_forward::expected_weights_desc(
           weight_.get_dims(),
           ideep::tensor::data_type::s8,
@@ -214,7 +214,7 @@ static at::Tensor mkldnn_conv_prepack(
           ideep::prop_kind::forward_inference,
           ideep::tensor::data_type::u8); // TODO: u8/s8
   ideep::tensor output;
-  if (weight_.get_descriptor() != desc) {
+  if (weight_.get_desc() != desc) {
     output.init(desc);
     output.set_scale(scale_);
     output.feed_from(weight_);
@@ -256,9 +256,10 @@ static std::tuple<at::Tensor, c10::optional<at::Tensor>> mkldnn_conv_unpack(
     auto scales = at::from_blob(
         w_scale.data(),
         w_scale.size(),
-        device(c10::kCPU).dtype(c10::kDouble));
+        device(c10::kCPU).dtype(c10::kFloat));
     auto zero_points = at::from_blob(
-        w_zp.data(), w_zp.size(), device(c10::kCPU).dtype(c10::kLong));
+        // w_zp.data(), w_zp.size(), device(c10::kCPU).dtype(c10::kLong));
+        w_zp.data(), w_zp.size(), device(c10::kCPU).dtype(c10::kInt));
       unpacked_weights = at::_empty_per_channel_affine_quantized(
           packB_mkldnn->get_dims(),
           scales,
