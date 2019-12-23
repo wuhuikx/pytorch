@@ -484,7 +484,6 @@ class TestMkldnn(TestCase):
             self.assertEqual(
                 linear(x),
                 mkldnn_linear(x.to_mkldnn()).to_dense())
-
             self._test_serialization(mkldnn_linear, (x.to_mkldnn(),))
             self._test_tracing(mkldnn_linear, (x.to_mkldnn(),))
 

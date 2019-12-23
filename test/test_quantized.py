@@ -2055,18 +2055,21 @@ class TestQMKLDNNOps(TestCase):
            has_bias=st.booleans(),
            use_channelwise=st.booleans(),
            X_scale=st.floats(0.2, 1.6),
-           ZP=st.sampled_from([0, 5]),
+           X_ZP=st.sampled_from([0, 5]),
            W_scale=st.lists(st.floats(0.2, 1.6), min_size=1, max_size=2),
            W_ZP=st.sampled_from([0, 5]),
-           Y_scale=st.floats(0.2, 1.6))
-    def test_linear_qmkldnn(self, shapes, has_bias, use_channelwise, X_scale, ZP, W_scale, W_ZP, Y_scale):
+           Y_scale=st.floats(0.2, 1.6),
+           Y_ZP=st.sampled_from([0, 5]))
+    def test_linear_qmkldnn(self, shapes, has_bias, use_channelwise, X_scale, X_ZP, W_scale, W_ZP, Y_scale, Y_ZP):
         """Tests the correctness of the Linear functional.
         """
+        # DDNL1.x only support per-tensor asymmetric quantization
+        use_channelwise = False
         W_zero_point = [0, W_ZP]
-        Y_zp = 0
+        Y_zp = Y_ZP 
         N = np.random.randint(7, 17)
         # Random inputs
-        X_zero_point = ZP
+        X_zero_point = X_ZP
         X_value_min = 0
         X_value_max = 10
         X_init = torch.from_numpy(np.random.randint(
@@ -2111,7 +2114,7 @@ class TestQMKLDNNOps(TestCase):
             W_q = torch.quantize_per_tensor(W, scale=W_scale[0], zero_point=W_zero_point[0], dtype=torch.qint8)
 
         qlinear_prepack = torch.ops.quantized.linear_prepack
-        qlinear = torch.ops.quantized.linear_relu
+        qlinear = torch.ops.quantized.linear
 
         # Reference
         torch.backends.quantized.engine = 'fbgemm'
@@ -2121,7 +2124,7 @@ class TestQMKLDNNOps(TestCase):
         torch.backends.quantized.engine = 'mkldnn'
         W_prepack = qlinear_prepack(W_q, b)
         q_result = qlinear(X_q, W_prepack, Y_scale, Y_zp)
-
+       
         self.assertEqual(ref_result, q_result)
 
     @given(K=st.integers(3, 7),
@@ -2422,8 +2425,9 @@ class TestQMKLDNNOps(TestCase):
     def test_linear_qmkldnn(self, shapes, has_bias, use_channelwise, X_scale, ZP, W_scale, W_ZP, Y_scale):
         """Tests the correctness of the Linear functional.
         """
+        use_channelwise = False
         W_zero_point = [0, W_ZP]
-        Y_zp = 0
+        Y_zp = ZP 
         N = np.random.randint(7, 17)
         # Random inputs
         X_zero_point = ZP
@@ -2471,7 +2475,7 @@ class TestQMKLDNNOps(TestCase):
             W_q = torch.quantize_per_tensor(W, scale=W_scale[0], zero_point=W_zero_point[0], dtype=torch.qint8)
 
         qlinear_prepack = torch.ops.quantized.linear_prepack
-        qlinear = torch.ops.quantized.linear_relu
+        qlinear = torch.ops.quantized.linear
 
         # Reference
         torch.backends.quantized.engine = 'fbgemm'

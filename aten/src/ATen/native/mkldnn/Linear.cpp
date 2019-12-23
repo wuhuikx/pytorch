@@ -53,18 +53,23 @@ Tensor mkldnn_linear(
   auto self_reshaped = self.dim() > 2 ? self.reshape({-1, self.size(self.dim() - 1)}) : self;
   const ideep::tensor x = itensor_from_mkldnn(self_reshaped);
   const ideep::tensor w = itensor_from_tensor(weight);
-
-  ideep::tensor y;
-  if (bias.defined()) {
-    const ideep::tensor b = itensor_from_tensor(bias);
-    ideep::inner_product_forward::compute(x, w, b, y);
-  } else {
-    ideep::inner_product_forward::compute(x, w, y);
-  }
-
+  const ideep::tensor w_trans = w.transpose(0, 1);
+  
   auto input_size = self.sizes();
   std::vector<int64_t> output_size(input_size.begin(), input_size.end() - 1);
   output_size.push_back(weight.size(0));
+
+  ideep::tensor y;
+  if (bias.defined()) {
+    ideep::tensor b = itensor_from_tensor(bias);
+    ideep::tensor::dims bias_dims(1, 1);
+    bias_dims.push_back(output_size.back());
+    auto bia_tag = bias_dims.size() == 2 ? ideep::format_tag::ab : ideep::format_tag::abc;
+    b.set_desc({bias_dims, b.get_data_type(), bia_tag});
+    ideep::matmul_forward::compute(x, w_trans, b, y);
+  } else {
+    ideep::matmul_forward::compute(x, w_trans, y);
+  }
 
   if (self.dim() > 2) {
     return new_with_itensor_mkldnn(std::move(y), self.options()).reshape(output_size);

@@ -230,18 +230,25 @@ class QLinearInt8 final : public torch::OperatorKernel {
     TORCH_CHECK(
         input.scalar_type() == ScalarType::QUInt8,
         "Only QUInt8 ScalarType activations are support")
-    TORCH_CHECK(output_zero_point == 0, "Only 0 point are support for MKL-DNN")
 
     auto& pack_ptr =
         cpp_custom_type_hack::cast<PackedWeightQmkldnn>(
             packed_weight);
     ideep::tensor weight_ = *pack_ptr.w.get();
+    auto weight_scale = weight_.get_scale();
+    auto weight_trans = weight_.transpose(0, 1);
+    weight_trans.set_scale(weight_scale);
+    std::vector<int32_t> weight_zero_point;
+    for (int i = 0; i < pack_ptr.w_zp.size(); ++i) {
+      weight_zero_point.push_back(static_cast<int32_t>(pack_ptr.w_zp[i]));
+    }
+    weight_trans.set_zero_point(weight_zero_point);
 
     // C(output) = A(input) x B(weight), where C, A, B are M x N, M x K, K x N
     // matrices, respectively.
     int64_t M = size_to_dim_(input.dim() - 1, input.sizes());
     int64_t K = input.size(input.dim() - 1);
-    int64_t N = weight_.get_dim(0);
+    int64_t N = weight_trans.get_dim(1);
 
     // The resulting matrix here is 2-D, let's view it with the original
     // left hand dimensions of the input. Here are two examples:
@@ -253,6 +260,7 @@ class QLinearInt8 final : public torch::OperatorKernel {
 
     ideep::tensor input_, output_;
     float input_scale = input.q_scale();
+    int32_t input_zero_point_int32 = input.q_zero_point();
     Tensor input_contig = input.contiguous();
     auto input_dtype = get_mkldnn_dtype(input.scalar_type());
     auto input_ptr = reinterpret_cast<uint8_t*>(input_contig.data_ptr());
@@ -260,20 +268,29 @@ class QLinearInt8 final : public torch::OperatorKernel {
     ideep::tensor::dims inputShape{M, K};
     input_.init(inputShape, input_dtype, input_ptr);
     input_.set_scale(ConvertScales({input_scale}));
+    input_.set_zero_point(std::vector<int32_t>(1, input_zero_point_int32));
 
     auto attr_ = ReluFused ? ideep::attr_t::fuse_relu()
                            : ideep::attr_t();
 
-    Tensor output = _empty_affine_quantized(
-        {out_sizes},
-        device(kCPU).dtype(kQUInt8),
-        output_scale,
-        output_zero_point);
-    uint8_t* output_ptr = reinterpret_cast<uint8_t*>(output.data_ptr());
-
+    Tensor output;
     ideep::tensor::dims outShape_in{M, N};
-    output_.init(outShape_in, ideep::tensor::data_type::u8, output_ptr);
-    output_.set_scale(output_scale_);
+    if (output_scale != 1.0 || output_zero_point != 0) {
+      output = _empty_affine_quantized(
+          {out_sizes},
+          device(kCPU).dtype(kQUInt8),
+          output_scale,
+          output_zero_point);
+      uint8_t* output_ptr = reinterpret_cast<uint8_t*>(output.data_ptr());
+      output_.init(outShape_in, ideep::tensor::data_type::u8, output_ptr);
+      output_.set_scale(output_scale_);
+      int32_t output_zero_point_int32 = static_cast<int32_t>(output_zero_point);
+      output_.set_zero_point(std::vector<int32_t>(1,output_zero_point_int32));
+    } else {
+      output =  at::empty({out_sizes}, device(kCPU).dtype(kFloat));
+      float* output_ptr = reinterpret_cast<float*>(output.data_ptr<float>());
+      output_.init(outShape_in, ideep::tensor::data_type::f32, output_ptr);
+    }
 
     if (pack_ptr.bias.has_value()) {
       auto bias = pack_ptr.bias.value();
@@ -284,11 +301,12 @@ class QLinearInt8 final : public torch::OperatorKernel {
           "bias should have N elements: " + std::to_string(N));
       auto bias_ptr = reinterpret_cast<float*>(bias.data_ptr<float>());
 
-      ideep::tensor bias_({N}, ideep::tensor::data_type::f32, bias_ptr);
-
-      ideep::inner_product_forward::compute(
+      ideep::tensor::dims bias_dims(output_.ndims()-1, 1);
+      bias_dims.push_back(N);
+      ideep::tensor bias_(bias_dims, ideep::tensor::data_type::f32, bias_ptr);
+      ideep::matmul_forward::compute(
           input_,
-          weight_,
+          weight_trans,
           bias_,
           output_,
           ideep::scale_t(),
@@ -296,9 +314,9 @@ class QLinearInt8 final : public torch::OperatorKernel {
           output_scale_,
           attr_); // TODO s8s8
     } else {
-      ideep::inner_product_forward::compute(
+      ideep::matmul_forward::compute(
           input_,
-          weight_,
+          weight_trans,
           output_,
           ideep::scale_t(),
           ideep::scale_t(),
@@ -428,7 +446,7 @@ class QLinearInt8 final : public torch::OperatorKernel {
 #if AT_MKLDNN_ENABLED()
     if (cpp_custom_type_hack::is_type<PackedWeightQmkldnn>(
             packed_weight)) {
-      if (can_dispatch_to_mkldnn(input, output_zero_point, ReluFused)) {
+      if (at::globalContext().qEngine() == at::kMKLDNN) {
         return mkldnn_linear(input, packed_weight, output_scale, output_zero_point);
       // We will fallback to FBGEMM if input don't meet mkldnn requirement even if
       // weights is mkldnn tensor.

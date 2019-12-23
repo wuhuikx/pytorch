@@ -197,10 +197,7 @@ class QLinearPackWeightInt8 final : public c10::OperatorKernel {
 #ifdef USE_FBGEMM
 #if AT_MKLDNN_ENABLED()
     if (ctx.qEngine() == at::kMKLDNN) {
-      bool is_zero = weight.qscheme() == c10::kPerChannelAffine
-          ? is_zeros<>(weight.q_per_channel_zero_points())
-          : weight.q_zero_point() == 0;
-      if (is_zero && (weight.scalar_type() == at::kQInt8)) {
+      if (weight.scalar_type() == at::kQInt8) {
         return mkldnn_linear_prepack(weight, bias);
       } else {
         return fbgemm_utils::fbgemm_linear_prepack(weight, bias);

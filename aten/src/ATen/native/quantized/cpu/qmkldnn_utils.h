@@ -65,7 +65,7 @@ static at::Tensor mkldnn_linear_prepack(
       weight_contig.sizes().vec(), ideep::tensor::data_type::s8, weight_ptr);
   weight_.set_scale(scale_);
   auto desc =
-      ideep::inner_product_forward::expected_weights_desc(
+      ideep::matmul_forward::expected_weights_desc(
           weight_.get_dims(),
           ideep::tensor::data_type::s8,
           ideep::tensor::data_type::u8);

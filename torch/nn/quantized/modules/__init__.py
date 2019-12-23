@@ -70,7 +70,10 @@ class DeQuantize(torch.nn.Module):
         super(DeQuantize, self).__init__()
 
     def forward(self, Xq):
-        return Xq.dequantize()
+        if Xq.dtype == torch.float32:
+          return Xq
+        else:
+          return Xq.dequantize()
 
     @staticmethod
     def from_float(mod):
