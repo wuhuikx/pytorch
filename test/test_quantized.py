@@ -2486,7 +2486,9 @@ class TestQMKLDNNOps(TestCase):
         W_prepack = qlinear_prepack(W_q, b)
         q_result = qlinear(X_q, W_prepack, Y_scale, Y_zp)
 
-        self.assertEqual(ref_result, q_result)
+        # ignore off-by-1 differences
+        np.testing.assert_array_almost_equal(
+            ref_result.int_repr().numpy(), q_result.int_repr().numpy(), decimal=0)
 
     @given(K=st.integers(3, 7),
            N=st.integers(3, 7),
@@ -2694,7 +2696,9 @@ class TestQMKLDNNOps(TestCase):
             Y_zero_point,
         )
 
-        self.assertEqual(Y_ref_q, Y_mkldnn_q)
+        # ignore off-by-1 differences
+        np.testing.assert_array_almost_equal(
+            Y_ref_q.int_repr().numpy(), Y_mkldnn_q.int_repr().numpy(), decimal=0)
 
     @given(output_channels_per_group=st.integers(3, 7),
            input_channels_per_group=st.integers(3, 7),
