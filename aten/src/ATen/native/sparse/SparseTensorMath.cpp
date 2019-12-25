@@ -417,9 +417,9 @@ inline void add_dense_sparse_worker_cpu(Tensor& r, Scalar value, const SparseTen
 }
 
 static constexpr unsigned add_dense_sparse_max_lock_num_bits = 14;
-static constexpr unsigned add_dense_ven_len_bits = 4;
+static constexpr unsigned add_dense_ven_len_bits = 5;
 static constexpr unsigned add_dense_ven_len = (1 << add_dense_ven_len_bits);
-static constexpr unsigned pipe4_ven_len = (add_dense_ven_len / 4);
+static constexpr unsigned pipe4_ven_len = (add_dense_ven_len >> 2);
 template <typename scalar_t>
 inline void add_dense_sparse_worker_critical_section_cpu(Tensor& r, Scalar value,
     const SparseTensor& sparse, const Tensor& indices, const Tensor& values) {
@@ -454,7 +454,7 @@ inline void add_dense_sparse_worker_critical_section_cpu(Tensor& r, Scalar value
     result_stride[d] = r.stride(d);
   }
   auto n = values_dense_size % add_dense_ven_len;
-  auto values_dense_size0 = values_dense_size >> add_dense_ven_len_bits;
+  auto values_dense_size0 = ((values_dense_size >> add_dense_ven_len_bits) << add_dense_ven_len_bits);
   auto sparse_nnz = sparse._nnz();
   at::parallel_for(0, sparse_nnz, 64, [&](int64_t start, int64_t end) {
     for (auto k = start; k < end; k++) {
@@ -469,7 +469,7 @@ inline void add_dense_sparse_worker_critical_section_cpu(Tensor& r, Scalar value
       while (locks.at(lock_id).exchange(true)) {_mm_pause();};
       int64_t vb;
       for(vb = 0; vb < values_dense_size0; vb += add_dense_ven_len) {
-        __attribute__((aligned(32))) scalar_t tmp_values[4 * pipe4_ven_len];
+        scalar_t tmp_values[4 * pipe4_ven_len];
         std::memcpy((void*)&tmp_values[0],
                     (void*)&v_index[vb + 0], pipe4_ven_len * sizeof(scalar_t));
         std::memcpy((void*)&tmp_values[1 * pipe4_ven_len],
