@@ -147,6 +147,54 @@ class TestMkldnn(TestCase):
                 self.assertEqual(conv2d.weight.grad, mkldnn_conv2d.weight.grad)
                 if bias:
                     self.assertEqual(conv2d.bias.grad, mkldnn_conv2d.bias.grad)
+    
+    def test_conv3d(self):
+        for groups in [1, 4]:
+            N = torch.randint(3, 10, (1,)).item()
+            C = torch.randint(1, 3, (1,)).item() * groups
+            M = torch.randint(1, 3, (1,)).item() * groups
+            x = torch.randn(N, C, 224, 224, 244, dtype=torch.float32) * 100
+            for bias in [True, False]:
+                conv3d = torch.nn.Conv3d(in_channels=C,
+                                         out_channels=M,
+                                         kernel_size=3,
+                                         stride=2,
+                                         padding=1,
+                                         bias=bias,
+                                         groups=groups).float()
+                mkldnn_conv3d = mkldnn_utils.to_mkldnn(copy.deepcopy(conv3d))
+                self.assertEqual(
+                    conv3d(x),
+                    mkldnn_conv3d(x.to_mkldnn()).to_dense())
+
+                #self._test_serialization(mkldnn_conv3d, (x.to_mkldnn(),))
+                #self._test_tracing(mkldnn_conv3d, (x.to_mkldnn(),))
+
+    def test_conv3d_backward(self):
+        for groups in [1, 4]:
+            N = 16 
+            C = 3 * groups
+            M = 3 * groups
+            x = torch.randn(N, C, 224, 224, 244, dtype=torch.float32) * 100
+            for bias in [False]:
+                conv3d = torch.nn.Conv3d(in_channels=C,
+                                         out_channels=M,
+                                         kernel_size=3,
+                                         stride=2,
+                                         padding=1,
+                                         bias=bias,
+                                         groups=groups).float()
+                mkldnn_conv3d = copy.deepcopy(conv3d)
+                x1 = x.clone().requires_grad_()
+                x2 = x.clone().to_mkldnn().requires_grad_()
+                y1 = conv3d(x1).sum()
+                y2 = mkldnn_conv3d(x2).to_dense().sum()
+                y1.backward()
+                y2.backward()
+                self.assertEqual(x1.grad, x2.grad.to_dense())
+                self.assertEqual(conv3d.weight.grad, mkldnn_conv3d.weight.grad)
+                if bias:
+                    self.assertEqual(conv3d.bias.grad, mkldnn_conv3d.bias.grad)
 
     def test_relu(self):
         x = torch.randn((4, 5), dtype=torch.float32) * 10
@@ -211,6 +259,43 @@ class TestMkldnn(TestCase):
             y1.backward()
             y2.backward()
             self.assertEqual(x1.grad, x2.grad.to_dense())
+    
+    def test_max_pool3d(self):
+        N = torch.randint(3, 10, (1,)).item()
+        C = torch.randint(3, 10, (1,)).item()
+
+        for stride in [1, 2, 3]:
+            for H, W, D in [(64, 64, 64), (35, 39, 39), (16, 19, 19), [7, 8, 8]]:
+                x = torch.randn(N, C, H, W, D, dtype=torch.float32) * 10
+
+                for ceil_mode in [False, True]:
+                    max_pool3d = torch.nn.MaxPool3d(
+                        kernel_size=3 if not ceil_mode else 7,
+                        stride=stride,
+                        padding=1,
+                        ceil_mode=ceil_mode)
+
+                    self.assertEqual(
+                        max_pool3d(x),
+                        max_pool3d(x.to_mkldnn()).to_dense())
+
+    def test_max_pool3d_backward(self):
+        x = torch.randn(10, 3, 64, 64, 64, dtype=torch.float32) * 10
+        for ceil_mode in [False, True]:
+            max_pool3d = torch.nn.MaxPool3d(
+                kernel_size=3,
+                stride=2,
+                padding=1,
+                ceil_mode=ceil_mode)
+
+            x1 = x.clone().requires_grad_()
+            x2 = x.clone().to_mkldnn().requires_grad_()
+
+            y1 = max_pool3d(x1).sum()
+            y2 = max_pool3d(x2).to_dense().sum()
+            y1.backward()
+            y2.backward()
+            self.assertEqual(x1.grad, x2.grad.to_dense())
 
     def test_avg_pool2d(self):
         N = torch.randint(3, 10, (1,)).item()
@@ -245,7 +330,41 @@ class TestMkldnn(TestCase):
             y1.backward()
             y2.backward()
             self.assertEqual(x1.grad, x2.grad.to_dense())
+    
+    def test_avg_pool3d(self):
+        N = torch.randint(3, 10, (1,)).item()
+        C = torch.randint(3, 10, (1,)).item()
+        x = torch.randn(N, C, 64, 64, 64, dtype=torch.float32) * 10
 
+        for count_include_pad in [True, False]:
+            avg_pool3d = torch.nn.AvgPool3d(
+                kernel_size=3,
+                stride=2,
+                padding=1,
+                count_include_pad=count_include_pad)
+
+            self.assertEqual(
+                avg_pool3d(x),
+                avg_pool3d(x.to_mkldnn()).to_dense())
+
+    def test_avg_pool3d_backward(self):
+        x = torch.randn(10, 3, 64, 64, 64, dtype=torch.float32) * 10
+
+        for count_include_pad in [True, False]:
+            x1 = x.clone().requires_grad_()
+            x2 = x.clone().to_mkldnn().requires_grad_()
+            avg_pool3d = torch.nn.AvgPool3d(
+                kernel_size=3,
+                stride=2,
+                padding=1,
+                count_include_pad=count_include_pad)
+
+            y1 = avg_pool3d(x1).sum()
+            y2 = avg_pool3d(x2).to_dense().sum()
+            y1.backward()
+            y2.backward()
+            self.assertEqual(x1.grad, x2.grad.to_dense())
+    
     def test_adaptive_avg_pool2d(self):
         N = torch.randint(3, 10, (1,)).item()
         C = torch.randint(3, 10, (1,)).item()
@@ -308,6 +427,54 @@ class TestMkldnn(TestCase):
                 x1 = x.clone().requires_grad_()
                 x2 = x.clone().to_mkldnn().requires_grad_()
                 bn = torch.nn.BatchNorm2d(
+                    3,
+                    affine=affine,
+                    track_running_stats=track_running_stats).float().train(True)
+                mkldnn_bn = copy.deepcopy(bn)
+                y1 = bn(x1).sum()
+                y2 = mkldnn_bn(x2).to_dense().sum()
+                y1.backward()
+                y2.backward()
+                self.assertEqual(x1.grad, x2.grad.to_dense())
+    
+    def test_batch_norm3d(self):
+        x = torch.randn(64, 3, 35, 45, 55, dtype=torch.float32) * 10
+
+        for train in [True, False]:
+            # TODO: support none affine
+            for affine in [True]:
+                for track_running_stats in [True, False]:
+                    bn = torch.nn.BatchNorm3d(
+                        3,
+                        affine=affine,
+                        track_running_stats=track_running_stats).float().train(train)
+                    if (train or not track_running_stats):
+                        mkldnn_bn = copy.deepcopy(bn)
+                    else:
+                        mkldnn_bn = mkldnn_utils.to_mkldnn(copy.deepcopy(bn))
+                    self.assertEqual(
+                        bn(x),
+                        mkldnn_bn(x.to_mkldnn()).to_dense(), prec=1e-4)
+                    if train and track_running_stats:
+                        self.assertEqual(
+                            bn.running_mean,
+                            mkldnn_bn.running_mean)
+                        self.assertEqual(
+                            bn.running_var,
+                            mkldnn_bn.running_var, prec=1e-3)
+                    if (not train and track_running_stats):
+                        self._test_serialization(mkldnn_bn, (x.to_mkldnn(),))
+                        self._test_tracing(mkldnn_bn, (x.to_mkldnn(),))
+
+    def test_batch_norm3d_backward(self):
+        x = torch.randn(64, 3, 35, 45, 55, dtype=torch.float32) * 10
+
+        # TODO: support none affine
+        for affine in [True]:
+            for track_running_stats in [True, False]:
+                x1 = x.clone().requires_grad_()
+                x2 = x.clone().to_mkldnn().requires_grad_()
+                bn = torch.nn.BatchNorm3d(
                     3,
                     affine=affine,
                     track_running_stats=track_running_stats).float().train(True)
