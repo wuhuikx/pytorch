@@ -66,23 +66,26 @@ ideep::tensor _mkldnn_conv2d(
   std::vector<int64_t> input_size{x_dims.cbegin(), x_dims.cend()};
   std::vector<int64_t> output_sizes =
       conv_output_size(input_size, kernel_size, padding, stride, dilation);
-
+  auto dim = input_size.size() - 2; 
+  std::vector<int> pad_l = {padding.begin(), padding.begin() + dim};
+  std::vector<int> pad_r = padding.size() > dim ? 
+	  std::vector<int>(padding.begin() + dim, padding.end()): pad_l;
   ideep::tensor y;
   if (b.has_value()) {
     ideep::convolution_forward::compute<AllocForMKLDNN>(
-        x,
-        w,
-        b.value(),
-        {output_sizes.cbegin(), output_sizes.cend()},
-        y,
-        {stride.begin(), stride.end()},
-        {dilation.begin(), dilation.end()},
-        {padding.begin(), padding.end()},
-        {padding.begin(), padding.end()},
-        groups,
-        ideep::descriptor_group::attr_t{},
-        ideep::algorithm::convolution_direct,
-        ideep::prop_kind::forward);
+      x,
+      w,
+      b.value(),
+      {output_sizes.cbegin(), output_sizes.cend()},
+      y,
+      {stride.begin(), stride.end()},
+      {dilation.begin(), dilation.end()},
+      pad_l,
+      pad_r,
+      groups,
+      ideep::descriptor_group::attr_t{},
+      ideep::algorithm::convolution_direct,
+      ideep::prop_kind::forward);
   } else {
     ideep::convolution_forward::compute<AllocForMKLDNN>(
       x,
@@ -91,8 +94,8 @@ ideep::tensor _mkldnn_conv2d(
       y,
       {stride.begin(), stride.end()},
       {dilation.begin(), dilation.end()},
-      {padding.begin(), padding.end()},
-      {padding.begin(), padding.end()},
+      pad_l,
+      pad_r,
       groups,
       ideep::descriptor_group::attr_t{},
       ideep::algorithm::convolution_direct,
@@ -182,7 +185,6 @@ Tensor mkldnn_convolution(
   if (bias.defined()) {
     mkldnn_bias = itensor_from_tensor(bias);
   }
-
   ideep::tensor mkldnn_output = _mkldnn_conv2d(
       mkldnn_input,
       mkldnn_weight,

@@ -15,7 +15,9 @@ std::vector<int64_t> conv_output_size(
   output_size[1] = kernel_size[0];
   for (size_t d = 2; d < dim; ++d) {
     auto kernel = dilation[d - 2] * (kernel_size[d] - 1) + 1;
-    output_size[d] = (input_size[d] + (2 * padding[d - 2])
+    auto pad = (padding.size() > (dim - 2)) ? 
+            padding[d - 2] + padding[d -4 + dim] : 2 * padding[d - 2];
+    output_size[d] = (input_size[d] + pad
                         - kernel) / stride[d - 2] + 1;
   }
   return output_size;
