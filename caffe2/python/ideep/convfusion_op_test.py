@@ -14,17 +14,10 @@ from caffe2.python import core, workspace
 from caffe2.python.transformations import optimizeForMKLDNN
 import caffe2.python.hypothesis_test_util as hu
 import caffe2.python.ideep_test_util as mu
-import hypothesis
-def no_deadline(fn):
-    try:
-        return hypothesis.settings(deadline=None)(fn)
-    except hypothesis.errors.InvalidArgument:
-        return
 
 
 @unittest.skipIf(not workspace.C.use_mkldnn, "No MKLDNN support.")
 class ConvFusionTest(hu.HypothesisTestCase):
-    @no_deadline
     @given(stride=st.integers(1, 3),
            pad=st.integers(0, 3),
            kernel=st.integers(3, 5),
@@ -123,7 +116,7 @@ class ConvFusionTest(hu.HypothesisTestCase):
             self.assertTrue(False)
 
         workspace.SwitchWorkspace(old_ws_name)
-    @no_deadline
+
     @given(stride=st.integers(1, 3),
            pad=st.integers(0, 3),
            kernel=st.integers(3, 5),
@@ -434,7 +427,7 @@ class ConvFusionTest(hu.HypothesisTestCase):
             print(S0.flatten())
             print(np.max(np.abs(S2 - S0)))
             self.assertTrue(False)
-    @no_deadline
+
     @given(stride=st.integers(1, 3),
            pad=st.integers(0, 3),
            kernel=st.integers(3, 5),
@@ -586,7 +579,7 @@ class ConvFusionTest(hu.HypothesisTestCase):
             self.assertTrue(False)
 
         workspace.SwitchWorkspace(old_ws_name)
-    @no_deadline
+
     @given(stride=st.integers(1, 3),
            pad=st.integers(0, 3),
            kernel=st.integers(3, 5),
@@ -695,7 +688,7 @@ class ConvFusionTest(hu.HypothesisTestCase):
             self.assertTrue(False)
 
         workspace.SwitchWorkspace(old_ws_name)
-    @no_deadline
+
     @given(stride=st.integers(1, 3),
            pad=st.integers(0, 3),
            kernel=st.integers(3, 5),
@@ -783,7 +776,7 @@ class ConvFusionTest(hu.HypothesisTestCase):
             self.assertTrue(False)
 
         workspace.SwitchWorkspace(old_ws_name)
-    @no_deadline
+
     @given(stride=st.integers(1, 3),
            pad=st.integers(0, 3),
            kernel=st.integers(3, 5),

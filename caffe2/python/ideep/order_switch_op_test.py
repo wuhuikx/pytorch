@@ -12,17 +12,10 @@ import caffe2.python.ideep_test_util as mu
 from hypothesis import given, settings
 from caffe2.proto import caffe2_pb2
 from caffe2.python import core, workspace
-import hypothesis
-def no_deadline(fn):
-    try:
-        return hypothesis.settings(deadline=None)(fn)
-    except hypothesis.errors.InvalidArgument:
-        return
 
 
 @unittest.skipIf(not workspace.C.use_mkldnn, "No MKLDNN support.")
 class OrderSwitchTest(hu.HypothesisTestCase):
-    @no_deadline
     @given(n=st.integers(1, 128),
            c=st.integers(1, 64),
            h=st.integers(1, 128),
@@ -37,7 +30,7 @@ class OrderSwitchTest(hu.HypothesisTestCase):
         X = np.random.rand(n, c, h, w).astype(np.float32) - 0.5
 
         self.assertDeviceChecks(dc, op, [X], [0])
-    @no_deadline
+
     @given(n=st.integers(1, 128),
            c=st.integers(1, 64),
            h=st.integers(1, 128),

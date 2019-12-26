@@ -183,7 +183,8 @@ auto ConvParams::use_mkldnn(const at::Tensor& input) const -> bool {
      (input.scalar_type() == kFloat ||
       input.scalar_type() == kBFloat16) && // only on CPU BF16 or Float Tensors
      !is_dilated() && // doesn't support dilation
-     !transposed); // or transposed tensors
+     !transposed && // or transposed tensors
+     input.ndimension() == 4); // must be in NCHW format
 #endif
   return false;
 }

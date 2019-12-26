@@ -10,17 +10,10 @@ import numpy as np
 from caffe2.python import core, workspace
 import caffe2.python.hypothesis_test_util as hu
 import caffe2.python.ideep_test_util as mu
-import hypothesis
-def no_deadline(fn):
-    try:
-        return hypothesis.settings(deadline=None)(fn)
-    except hypothesis.errors.InvalidArgument:
-        return
 
 
 @unittest.skipIf(not workspace.C.use_mkldnn, "No MKLDNN support.")
 class ChannelShuffleTest(hu.HypothesisTestCase):
-    @no_deadline
     @given(size=st.integers(8, 10),
            input_channels=st.integers(1, 3),
            batch_size=st.integers(1, 32),
