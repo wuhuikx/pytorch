@@ -59,8 +59,7 @@ static void check_cat_no_zero_dim(TensorList tensors) {
 }
 
 Tensor & cat_out(Tensor & result, TensorList tensors, int64_t dim) {
-  if (tensors.size() > 0 &&
-    tensors[0].is_mkldnn()) {
+  if (tensors.size() > 0 && tensors[0].is_mkldnn()) {
     return at::mkldnn_cat_out(result, tensors, dim);
   }
   check_cat_no_zero_dim(tensors);
