@@ -258,8 +258,10 @@ static Tensor _mkldnn_pool2d_backward(
   auto kernel_size_vec = expand_param_if_needed(kernel_size, "kernel_size", expected_dim);
   auto stride_vec = expand_param_if_needed(stride, "stride", expected_dim);
   auto padding_vec = expand_param_if_needed(padding, "padding", expected_dim);
-  auto padding_vec_l = padding_vec;
-  auto padding_vec_r = padding_vec;
+  std::vector<int64_t> padding_vec_l = {padding_vec.begin(), padding_vec.begin() + expected_dim};
+  std::vector<int64_t> padding_vec_r = (padding_vec.size() > expected_dim) ?
+      std::vector<int64_t>(padding_vec.begin() + expected_dim, padding_vec.end()) : 
+      padding_vec_l;
   auto dilation_vec = expand_param_if_needed(dilation, "dilation", expected_dim);
 
   if (ceil_mode) {

@@ -112,7 +112,10 @@ ideep::tensor _mkldnn_conv2d_backward_input(
     IntArrayRef stride,
     IntArrayRef dilation,
     int64_t groups) {
-
+  auto dim = input_sizes.size() - 2; 
+  std::vector<int> pad_l = {padding.begin(), padding.begin() + dim};
+  std::vector<int> pad_r = padding.size() > dim ? 
+	  std::vector<int>(padding.begin() + dim, padding.end()): pad_l;
   ideep::tensor gradx;
   ideep::convolution_backward_data::compute<AllocForMKLDNN>(
       grady,
@@ -121,8 +124,8 @@ ideep::tensor _mkldnn_conv2d_backward_input(
       gradx,
       {stride.begin(), stride.end()},
       {dilation.begin(), dilation.end()},
-      {padding.begin(), padding.end()},
-      {padding.begin(), padding.end()},
+      pad_l,
+      pad_r,
       groups,
       ideep::algorithm::convolution_direct);
 
@@ -139,6 +142,10 @@ std::tuple<ideep::tensor, ideep::tensor> _mkldnn_conv2d_backward_weights(
     int64_t groups,
     bool bias_defined) {
 
+  auto dim = weight_sizes.size() - 2; 
+  std::vector<int> pad_l = {padding.begin(), padding.begin() + dim};
+  std::vector<int> pad_r = padding.size() > dim ? 
+	  std::vector<int>(padding.begin() + dim, padding.end()): pad_l;
   ideep::tensor gradw, gradb;
   if (bias_defined) {
     ideep::convolution_backward_weights::compute<AllocForMKLDNN>(
@@ -149,8 +156,8 @@ std::tuple<ideep::tensor, ideep::tensor> _mkldnn_conv2d_backward_weights(
         gradb,
         {stride.begin(), stride.end()},
         {dilation.begin(), dilation.end()},
-        {padding.begin(), padding.end()},
-        {padding.begin(), padding.end()},
+        pad_l,
+        pad_r,
         groups,
         ideep::algorithm::convolution_direct);
   } else {
@@ -161,8 +168,8 @@ std::tuple<ideep::tensor, ideep::tensor> _mkldnn_conv2d_backward_weights(
         gradw,
         {stride.begin(), stride.end()},
         {dilation.begin(), dilation.end()},
-        {padding.begin(), padding.end()},
-        {padding.begin(), padding.end()},
+        pad_l,
+        pad_r,
         groups,
         ideep::algorithm::convolution_direct);
   }
