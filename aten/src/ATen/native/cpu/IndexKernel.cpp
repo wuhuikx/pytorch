@@ -83,7 +83,7 @@ void cpu_index_kernel(TensorIterator& iter, IntArrayRef index_size, IntArrayRef 
   if (serial_execution) {
     iter.serial_for_each(loop, {0, iter.numel()});
   } else {
-    iter.for_each(loop, 4096);
+    iter.for_each(loop, 3000);
   }
 }
 
