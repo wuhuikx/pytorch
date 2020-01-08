@@ -16,6 +16,7 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/device_vector.h>
 
+#include <ATen/native/EmbeddingBag.h>
 #include <ATen/native/cuda/EmbeddingBackwardKernel.cuh>
 
 #include <c10/macros/Macros.h>

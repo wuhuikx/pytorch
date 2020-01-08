@@ -2,6 +2,7 @@
 #include <ATen/NativeFunctions.h>
 #include <ATen/Parallel.h>
 #include <ATen/TensorUtils.h>
+#include <ATen/native/EmbeddingBag.h>
 
 #include <TH/THBlasUtils.h>
 
@@ -23,13 +24,6 @@ namespace {
 
 namespace at {
 namespace native {
-
-static void make_offset2bag(const Tensor &offsets, const Tensor &indices, Tensor& offset2bag) {
-  offset2bag.index_add_(
-      0, offsets, at::ones_like(offsets, LEGACY_CONTIGUOUS_MEMORY_FORMAT)); // offset2bag = [1 0 1 0 1]
-  offset2bag[0] -= 1;                     // offset2bag = [0 0 1 0 1]
-  offset2bag = offset2bag.cumsum(0);     // offset2bag = [0 0 1 1 2]
-}
 
 namespace {
 
