@@ -52,8 +52,7 @@ Tensor mkldnn_linear(
   // reshape first if input dim is greater than 2 and the reshape will cost a memory copy.
   auto self_reshaped = self.dim() > 2 ? self.reshape({-1, self.size(self.dim() - 1)}) : self;
   const ideep::tensor x = itensor_from_mkldnn(self_reshaped);
-  const ideep::tensor w = itensor_from_tensor(weight);
-  const ideep::tensor w_trans = w.transpose(0, 1);
+  const ideep::tensor w_trans = itensor_from_tensor(weight).transpose_(0, 1);
   
   auto input_size = self.sizes();
   std::vector<int64_t> output_size(input_size.begin(), input_size.end() - 1);
