@@ -41,6 +41,7 @@ class QLinearInt8 final : public torch::OperatorKernel {
         "The dimension of input tensor should be larger than or equal to 2");
     // C(output) = A(input) x B(weight), where C, A, B are M x N, M x K, K x N
     // matrices, respectively.
+    
     int64_t M = size_to_dim_(input.dim() - 1, input.sizes());
 
     // Pull out the PackBMatrix and col_offsets instance from the owning tensor.
@@ -224,19 +225,18 @@ class QLinearInt8 final : public torch::OperatorKernel {
       Tensor& packed_weight,
       double output_scale,
       int64_t output_zero_point) {
-    TORCH_CHECK(
-        input.dim() >= 2,
-        "The dimension of input tensor should be larger than or equal to 2");
-    TORCH_CHECK(
-        input.scalar_type() == ScalarType::QUInt8,
+    TORCH_CHECK(input.dim() == 2 || input.dim() == 3,
+        "mkldnn_linear: only support input with 2 or 3 dim, input dim ", input.dim());
+    TORCH_CHECK(input.scalar_type() == ScalarType::QUInt8,
         "Only QUInt8 ScalarType activations are support")
 
     auto& pack_ptr =
         cpp_custom_type_hack::cast<PackedWeightQmkldnn>(
             packed_weight);
-    ideep::tensor weight_ = *pack_ptr.w.get();
-    auto weight_scale = weight_.get_scale();
-    auto weight_trans = weight_.transpose(0, 1);
+    auto weight_scale = pack_ptr.w.get()->get_scale();
+    auto weights_ = *pack_ptr.w.get();
+    auto weight_dims = weights_.ndims();
+    auto weight_trans = weights_.transpose_(weight_dims-2, weight_dims-1);
     weight_trans.set_scale(weight_scale);
     std::vector<int32_t> weight_zero_point;
     for (int i = 0; i < pack_ptr.w_zp.size(); ++i) {
@@ -248,7 +248,7 @@ class QLinearInt8 final : public torch::OperatorKernel {
     // matrices, respectively.
     int64_t M = size_to_dim_(input.dim() - 1, input.sizes());
     int64_t K = input.size(input.dim() - 1);
-    int64_t N = weight_trans.get_dim(1);
+    int64_t N = weight_trans.get_dim(weight_trans.ndims()-1);
 
     // The resulting matrix here is 2-D, let's view it with the original
     // left hand dimensions of the input. Here are two examples:
