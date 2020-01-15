@@ -36,18 +36,17 @@ class IDEEPConvOp : public IDEEPConvPoolOpBase {
     const auto& X = Input(INPUT_X);
     const auto& filter = Input(FILTER);
     auto* Y = Output(OUTPUT);
-    auto grouped = false;
 
     CAFFE_ENFORCE(4 == X.ndims());
-    CAFFE_ENFORCE(4 == filter.ndims() || (grouped && (group_ > 1)));
-    CAFFE_ENFORCE_EQ(filter.get_dim(2 + grouped), kernel_h());
-    CAFFE_ENFORCE_EQ(filter.get_dim(3 + grouped), kernel_w());
+    CAFFE_ENFORCE(4 == filter.ndims());
+    CAFFE_ENFORCE_EQ(filter.get_dim(2), kernel_h());
+    CAFFE_ENFORCE_EQ(filter.get_dim(3), kernel_w());
     CAFFE_ENFORCE(
-        X.get_dim(1) == filter.get_dim(1 + grouped) * group_,
+        X.get_dim(1) == filter.get_dim(1) * group_,
         "Convolution op: input channels does not match: # of input channels ",
         X.get_dim(1),
         " is not equal to kernel channels * group:",
-        filter.get_dim(1 + grouped),
+        filter.get_dim(1),
         "*",
         group_);
 

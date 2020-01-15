@@ -73,8 +73,7 @@ ideep::tensor _mkldnn_conv2d(
 
   auto kernel_size = w.get_dims();
 
-  auto x_dims = x.get_dims();
-  std::vector<int64_t> input_size{x_dims.cbegin(), x_dims.cend()};
+  std::vector<int64_t> input_size = x.get_dims();
   std::vector<int64_t> output_sizes =
       conv_output_size(input_size, kernel_size, padding, stride, dilation);
 
@@ -118,8 +117,7 @@ ideep::tensor _mkldnn_convolution_transpose(
 
   auto kernel_size = w.get_dims();
 
-  auto x_dims = x.get_dims();
-  std::vector<int64_t> input_size{x_dims.cbegin(), x_dims.cend()};
+  std::vector<int64_t> input_size = x.get_dims();
   std::vector<int64_t> output_sizes =
       conv_input_size(input_size, kernel_size, padding, output_padding, stride, dilation, groups);
   ideep::tensor y;

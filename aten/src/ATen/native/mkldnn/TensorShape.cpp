@@ -75,8 +75,8 @@ Tensor mkldnn_reshape(const Tensor& self, IntArrayRef size) {
   if (self.sizes() == inferred_size) {
     return self;
   }
-  auto& x = itensor_from_mkldnn(self);
-  auto y = x;
+  const ideep::tensor& x = itensor_from_mkldnn(self);
+  ideep::tensor y{x};
   y.reshape(inferred_size);
   return new_with_itensor_mkldnn(std::move(y), self.options());
 }
