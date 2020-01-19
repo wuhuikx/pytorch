@@ -472,21 +472,26 @@ class TestMkldnn(TestCase):
                     x.transpose(dim1, dim2),
                     x.to_mkldnn().transpose(dim1, dim2).to_dense(),
                 )
-
     def test_linear(self):
         in_features = torch.randint(3, 10, (1,)).item()
         out_features = torch.randint(3, 100, (1,)).item()
         x = torch.randn(3, in_features, dtype=torch.float32) * 10
 
+        dtype = torch.bfloat16
         for bias in [True, False]:
             linear = torch.nn.Linear(in_features, out_features, bias=bias).float()
-            mkldnn_linear = mkldnn_utils.to_mkldnn(copy.deepcopy(linear))
-            self.assertEqual(
-                linear(x),
-                mkldnn_linear(x.to_mkldnn()).to_dense())
-            self._test_serialization(mkldnn_linear, (x.to_mkldnn(),))
-            self._test_tracing(mkldnn_linear, (x.to_mkldnn(),))
-
+           
+            for dtype in [torch.bfloat16, torch.float]:
+                x_ = x.clone().to_mkldnn().to(dtype)
+                mkldnn_linear = mkldnn_utils.to_mkldnn(copy.deepcopy(linear)).to(dtype)
+                self.assertEqual(
+                    linear(x),
+                    mkldnn_linear(x_).float().to_dense(),
+                    1e-1 if dtype == torch.bfloat16 else 1e-05)
+                if dtype == torch.float:
+                    self._test_serialization(mkldnn_linear, (x_,))
+                    self._test_tracing(mkldnn_linear, (x_,))
+    
     # we should first expose aten::linear, depend on https://github.com/pytorch/pytorch/pull/20039
     def test_linear_backward(self):
         in_features = torch.randint(3, 10, (1,)).item()
@@ -506,6 +511,49 @@ class TestMkldnn(TestCase):
             if bias:
                 self.assertEqual(linear.bias.grad, mkldnn_linear.bias.grad)
 
+    def test_bmm(self):
+        num_batches = 10
+        M, N, O = 23, 8, 12
+        b1 = torch.randn(num_batches, M, N, dtype=torch.float32)
+        b2 = torch.randn(num_batches, N, O, dtype=torch.float32)
+        bmm = torch.bmm(b1, b2)
+        for dtype in [torch.bfloat16, torch.float]:
+            b1_ = b1.clone().to_mkldnn().to(dtype)
+            b2_ = b2.clone().to_mkldnn().to(dtype)
+            mkldnn_bmm = torch.bmm(b1_, b2_)
+            self.assertEqual(mkldnn_bmm.dtype, dtype)
+            self.assertEqual(bmm, mkldnn_bmm.float().to_dense(), prec=5e-02)
+            
+            y = torch.randn(num_batches, M, O, dtype=torch.float32)
+            mkldnn_y = y.clone().to_mkldnn().to(dtype)
+            torch.bmm(b1_, b2_, out=mkldnn_y)
+            self.assertEqual(mkldnn_y.dtype, dtype)
+            self.assertEqual(bmm, mkldnn_y.float().to_dense(), prec=5e-02)
+    
+    def test_baddmm_mkldnn(self):
+        alpha = 0.3;
+        beta = 0.5;
+        num_batches = 10
+        M, N, O = 23, 8, 12
+        b1 = torch.randn(num_batches, M, N, dtype=torch.float32)
+        b2 = torch.randn(num_batches, N, O, dtype=torch.float32)
+        res = torch.randn(num_batches, M, O, dtype=torch.float32)
+        
+        baddbmm = torch.baddbmm(alpha, res, beta, b1, b2)
+        for dtype in [torch.bfloat16, torch.float]:
+            b1_ = b1.clone().to_mkldnn().to(dtype)
+            b2_ = b2.clone().to_mkldnn().to(dtype)
+            res_ = res.clone().to_mkldnn().to(dtype)
+            mkldnn_baddbmm = torch.baddbmm(alpha, res_, beta, b1_, b2_)
+            self.assertEqual(mkldnn_baddbmm.dtype, dtype)
+            self.assertEqual(baddbmm, mkldnn_baddbmm.float().to_dense(), prec=5e-02)
+            
+            y = torch.randn(num_batches, M, O, dtype=torch.float32)
+            mkldnn_y = y.clone().to_mkldnn().to(dtype)
+            torch.baddbmm(alpha, res_, beta, b1_, b2_, out=mkldnn_y),
+            self.assertEqual(mkldnn_y.dtype, dtype)
+            self.assertEqual(baddbmm, mkldnn_y.float().to_dense(), prec=5e-02)
+    
     def test_softmax(self):
         x = torch.randn(3, 4, 5, dtype=torch.float32) * 10
         for dim in range(x.ndim):

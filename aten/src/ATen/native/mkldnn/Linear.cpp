@@ -44,12 +44,14 @@ Tensor mkldnn_linear(
     const Tensor& self,
     const Tensor& weight,
     const Tensor& bias) {
-  TORCH_CHECK(self.dim() == 2 || self.dim() == 3,
-      "mkldnn_linear: only support input with 2 or 3 dim, input dim ", self.dim());
+  TORCH_CHECK(self.dim() >= 2,
+      "mkldnn_linear: input needs to has dim at least 2, input dim ", self.dim());
   TORCH_CHECK(self.is_mkldnn(),
       "mkldnn_linear: input needs to be mkldnn layout");
 
-  const ideep::tensor x = itensor_from_mkldnn(self);
+  // reshape first if input dim is greater than 2 and the reshape will cost a memory copy.
+  auto self_reshaped = self.dim() > 2 ? self.reshape({-1, self.size(self.dim() - 1)}) : self;
+  const ideep::tensor x = itensor_from_mkldnn(self_reshaped);
   const ideep::tensor w_trans = itensor_from_tensor(weight).transpose_(0, 1);
   
   auto input_size = self.sizes();
@@ -61,7 +63,8 @@ Tensor mkldnn_linear(
     ideep::tensor b = itensor_from_tensor(bias);
     ideep::tensor::dims bias_dims(output_size.size() - 1, 1);
     bias_dims.push_back(output_size.back());
-    auto bia_tag = bias_dims.size() == 2 ? ideep::format_tag::ab : ideep::format_tag::abc;
+    //auto bia_tag = bias_dims.size() == 2 ? ideep::format_tag::ab : ideep::format_tag::abc;
+    auto bia_tag = ideep::format_tag::ab;
     b.set_desc({bias_dims, b.get_data_type(), bia_tag});
     ideep::matmul_forward::compute(x, w_trans, b, y);
   } else {

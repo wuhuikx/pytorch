@@ -459,6 +459,7 @@
   dispatch:
     CPU: baddbmm_cpu
     CUDA: baddbmm_cuda
+    MkldnnCPU: baddmm_mkldnn 
 
 - func: baddbmm_(Tensor(a!) self, Tensor batch1, Tensor batch2, *, Scalar beta=1, Scalar alpha=1) -> Tensor(a!)
   variants: method
@@ -474,6 +475,7 @@
   dispatch:
     CPU: baddbmm_out_cpu
     CUDA: baddbmm_out_cuda
+    MkldnnCPU: baddbmm_out_mkldnn 
 
 - func: bartlett_window(int window_length, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None) -> Tensor
 
@@ -581,6 +583,7 @@
   dispatch:
     CPU: bmm_cpu
     CUDA: bmm_cuda
+    MkldnnCPU: bmm_mkldnn
   supports_named_tensor: True
 
 - func: bmm.out(Tensor self, Tensor mat2, *, Tensor(a!) out) -> Tensor(a!)
@@ -588,6 +591,7 @@
   dispatch:
     CPU: bmm_out_cpu
     CUDA: bmm_out_cuda
+    MkldnnCPU: bmm_out_mkldnn 
   supports_named_tensor: True
 
 - func: broadcast_tensors(Tensor[] tensors) -> Tensor[]
