@@ -4285,16 +4285,16 @@ class TestNN(NNTestCase):
     def test_mse_loss_bfloat16(self):
         i = torch.randn((10, 1), dtype=torch.float, requires_grad=True)
         t = torch.randn((10, 1), dtype=torch.float)
-        i_b = i.detach().to(torch.bfloat16).requires_grad_(True)
-        t_b = t.to(torch.bfloat16)
+        i_bf16= i.detach().to(torch.bfloat16).requires_grad_(True)
+        t_bf16= t.to(torch.bfloat16)
         outputf = F.mse_loss(i, t)
-        output = F.mse_loss(i_b, t_b)
+        output = F.mse_loss(i_bf16, t_bf16)
         self.assertEqual(output.dtype, torch.bfloat16)
         self.assertEqual(output, outputf, prec=1e-02)
         outputf.sum().backward()
         output.sum().backward()
-        self.assertEqual(i_b.grad.dtype, torch.bfloat16)
-        self.assertEqual(i_b.grad, i.grad, prec=1e-02)
+        self.assertEqual(i_bf16.grad.dtype, torch.bfloat16)
+        self.assertEqual(i_bf16.grad, i.grad, prec=1e-02)
 
     def test_nll_loss_mismatched_batch(self):
         x = torch.randn((10, 3), requires_grad=True)
