@@ -1517,6 +1517,7 @@
 ]]
 [[
   name: _th_normal_
+  cpu_bfloat16: True
   types:
     - floating_point
   backends:

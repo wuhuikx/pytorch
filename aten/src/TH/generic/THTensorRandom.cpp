@@ -87,7 +87,6 @@ void THTensor_(uniform)(THTensor *self, double a, double b, at::Generator *_gene
   #endif
 }
 
-#if !defined(TH_REAL_IS_BFLOAT16) /* non bfloat16 part*/
 void THTensor_(normal)(THTensor *self, double mean, double stddev, at::Generator *_generator)
 {
   const int64_t size = THTensor_(numel)(self);
@@ -103,6 +102,7 @@ void THTensor_(normal)(THTensor *self, double mean, double stddev, at::Generator
   }
 }
 
+#if !defined(TH_REAL_IS_BFLOAT16) /* non bfloat16 part*/
 void THTensor_(normal_means)(THTensor *self, THTensor *means, double stddev, at::Generator *gen)
 {
   THTensor_(resizeAs)(self, means);
