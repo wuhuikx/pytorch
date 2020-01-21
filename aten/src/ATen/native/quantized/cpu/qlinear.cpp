@@ -225,8 +225,8 @@ class QLinearInt8 final : public torch::OperatorKernel {
       Tensor& packed_weight,
       double output_scale,
       int64_t output_zero_point) {
-    TORCH_CHECK(input.dim() == 2 || input.dim() == 3,
-        "mkldnn_linear: only support input with 2 or 3 dim, input dim ", input.dim());
+    TORCH_CHECK(input.dim() >= 2,
+        "mkldnn_linear: input needs to has dim at least 2, input dim ", input.dim());
     TORCH_CHECK(input.scalar_type() == ScalarType::QUInt8,
         "Only QUInt8 ScalarType activations are support")
 
@@ -309,6 +309,7 @@ class QLinearInt8 final : public torch::OperatorKernel {
           weight_trans,
           bias_,
           output_,
+          1.0f, 1.0f, 1.0f,
           ideep::scale_t(),
           ideep::scale_t(),
           output_scale_,
@@ -318,6 +319,7 @@ class QLinearInt8 final : public torch::OperatorKernel {
           input_,
           weight_trans,
           output_,
+          1.0f, 1.0f, 1.0f,
           ideep::scale_t(),
           ideep::scale_t(),
           output_scale_,

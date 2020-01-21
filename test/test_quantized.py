@@ -2063,10 +2063,6 @@ class TestQMKLDNNOps(TestCase):
     def test_linear_qmkldnn(self, shapes, has_bias, use_channelwise, X_scale, X_ZP, W_scale, W_ZP, Y_scale, Y_ZP):
         """Tests the correctness of the Linear functional.
         """
-        # DDNL1.x only support per-tensor asymmetric quantization
-        use_channelwise = False
-        W_zero_point = [0, W_ZP]
-        Y_zp = Y_ZP 
         N = np.random.randint(7, 17)
         # Random inputs
         X_zero_point = X_ZP
@@ -2077,6 +2073,7 @@ class TestQMKLDNNOps(TestCase):
         X = X_scale * (X_init - X_zero_point).to(dtype=torch.float)
 
         W_scale = W_scale * N
+        W_zero_point = [0, W_ZP]
         W_zero_point = W_zero_point * N
         # Resize W_scale and W_zero_points arrays equal to output_channels
         W_scale = W_scale[:N]
@@ -2089,14 +2086,14 @@ class TestQMKLDNNOps(TestCase):
                 W_value_max,
                 (N, X_init.shape[-1])),
         )
-
         b_init = torch.from_numpy(np.random.randint(0, 10, (N,)))
 
+        Y_zp = Y_ZP 
         if use_channelwise:
             W_scales_tensor = torch.tensor(W_scale, dtype=torch.float)
             W_zero_points_tensor = torch.tensor(W_zero_point, dtype=torch.int32)
             W = W_scales_tensor.reshape(-1, 1) * (W_init.to(dtype=torch.float) -
-                                                  W_zero_points_tensor.reshape(-1, 1)).to(dtype=torch.float)
+                    W_zero_points_tensor.reshape(-1, 1)).to(dtype=torch.float)
             b = X_scale * W_scales_tensor * (b_init - 0).to(dtype=torch.float) if has_bias else None
         else:
             W = W_scale[0] * (W_init - W_zero_point[0]).to(dtype=torch.float)
