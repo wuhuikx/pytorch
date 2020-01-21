@@ -451,12 +451,14 @@
   dispatch:
     CPU: baddbmm_cpu
     CUDA: baddbmm_cuda
+    MkldnnCPU: baddbmm_mkldnn 
 
 - func: baddbmm_(Tensor(a!) self, Tensor batch1, Tensor batch2, *, Scalar beta=1, Scalar alpha=1) -> Tensor(a!)
   variants: method
   dispatch:
     CPU: baddbmm__cpu
     CUDA: baddbmm__cuda
+    MkldnnCPU: baddbmm__mkldnn 
 
 - func: _baddbmm_mkl_(Tensor(a!) self, Tensor batch1, Tensor batch2, *, Scalar beta=1, Scalar alpha=1) -> Tensor(a!)
   variants: function
@@ -466,6 +468,7 @@
   dispatch:
     CPU: baddbmm_out_cpu
     CUDA: baddbmm_out_cuda
+    MkldnnCPU: baddbmm_out_mkldnn 
 
 - func: bartlett_window(int window_length, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None) -> Tensor
 
@@ -573,6 +576,7 @@
   dispatch:
     CPU: bmm_cpu
     CUDA: bmm_cuda
+    MkldnnCPU: bmm_mkldnn
   supports_named_tensor: True
 
 - func: bmm.out(Tensor self, Tensor mat2, *, Tensor(a!) out) -> Tensor(a!)
@@ -580,6 +584,7 @@
   dispatch:
     CPU: bmm_out_cpu
     CUDA: bmm_out_cuda
+    MkldnnCPU: bmm_out_mkldnn 
   supports_named_tensor: True
 
 - func: broadcast_tensors(Tensor[] tensors) -> Tensor[]
@@ -1837,6 +1842,7 @@
     CUDA: legacy::cuda::_th_mm
     SparseCPU: _sparse_mm
     SparseCUDA: _sparse_mm
+    MkldnnCPU: mm_mkldnn
   supports_named_tensor: True
 
 - func: mm.out(Tensor self, Tensor mat2, *, Tensor(a!) out) -> Tensor(a!)
@@ -1845,6 +1851,7 @@
     CUDA: legacy::cuda::_th_mm_out
     SparseCPU: _sparse_mm_out
     SparseCUDA: _sparse_mm_out
+    MkldnnCPU: mm_out_mkldnn
   supports_named_tensor: True
 
 - func: _sparse_mm(Tensor sparse, Tensor dense) -> Tensor
@@ -3099,7 +3106,7 @@
     CUDA: legacy::cuda::_th_addmm_out
     SparseCPU: addmm_out_sparse_dense_cpu
     SparseCUDA: addmm_out_sparse_dense_cuda
-    MkldnnCPU: mkldnn_linear_wraper_out
+    MkldnnCPU: addmm_out_mkldnn 
   supports_named_tensor: True
 
 - func: addmm(Tensor self, Tensor mat1, Tensor mat2, *, Scalar beta=1, Scalar alpha=1) -> Tensor
@@ -3110,7 +3117,7 @@
     CUDA: legacy::cuda::_th_addmm
     SparseCPU: addmm_sparse_dense_cpu
     SparseCUDA: addmm_sparse_dense_cuda
-    MkldnnCPU: mkldnn_linear_wraper
+    MkldnnCPU: addmm_mkldnn 
   supports_named_tensor: True
 
 - func: addmm_(Tensor(a!) self, Tensor mat1, Tensor mat2, *, Scalar beta=1, Scalar alpha=1) -> Tensor(a!)
@@ -3122,6 +3129,7 @@
     # broadcasting
     SparseCPU: s_addmm_sparse_dense_cpu_
     SparseCUDA: s_addmm_sparse_dense_cuda_
+    MkldnnCPU: addmm__mkldnn 
   supports_named_tensor: True
 
 
