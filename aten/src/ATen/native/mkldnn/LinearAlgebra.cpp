@@ -101,14 +101,15 @@ namespace native {
 
 // bmm with batch_size>1 will go to DNNL matmul ref path,
 // because matmul kernels (both fp32 and bf16) only support batch_size=1
+// TODO: enable the jit path by reshaping (b, M, N) to (b*M, N) 
 Tensor bmm_mkldnn(
     const Tensor& self, 
     const Tensor& mat2) {
-  const ideep::tensor x = itensor_from_mkldnn(self);
-  const ideep::tensor w = itensor_from_mkldnn(mat2);
-  ideep::tensor y;
-  ideep::matmul_forward::compute(x, w, y);
-  return new_with_itensor_mkldnn(std::move(y), self.options());
+  auto self_size = self.sizes();
+  std::vector<int64_t> result_size(self_size.begin(), self_size.end()-1);
+  result_size.push_back(mat2.size(-1));
+  Tensor result = empty_mkldnn(result_size, self.options());
+  return bmm_out_mkldnn(result, self, mat2);
 }
 
 Tensor& bmm_out_mkldnn(
@@ -138,6 +139,7 @@ Tensor& mm_out_mkldnn(
 
 // baddbmm with batch_size>1 will go to DNNL matmul ref path,
 // because matmul kernels (both fp32 and bf16) only support batch_size=1
+// TODO: enable the jit path by reshaping (b, M, N) to (b*M, N) 
 Tensor baddbmm_mkldnn(
     const Tensor& self,
     const Tensor& batch1,

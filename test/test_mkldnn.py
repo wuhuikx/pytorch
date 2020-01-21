@@ -472,6 +472,7 @@ class TestMkldnn(TestCase):
                     x.transpose(dim1, dim2),
                     x.to_mkldnn().transpose(dim1, dim2).to_dense(),
                 )
+
     def test_linear(self):
         in_features = torch.randint(3, 10, (1,)).item()
         out_features = torch.randint(3, 100, (1,)).item()
@@ -480,7 +481,7 @@ class TestMkldnn(TestCase):
         dtype = torch.bfloat16
         for bias in [True, False]:
             linear = torch.nn.Linear(in_features, out_features, bias=bias).float()
-           
+
             for dtype in [torch.bfloat16, torch.float]:
                 x_ = x.clone().to_mkldnn().to(dtype)
                 mkldnn_linear = mkldnn_utils.to_mkldnn(copy.deepcopy(linear)).to(dtype)
@@ -572,7 +573,6 @@ class TestMkldnn(TestCase):
                     torch.addmm(alpha, res_, beta, b1_, b2_, out=mkldnn_y),
                     self.assertEqual(mkldnn_y.dtype, dtype)
                     self.assertEqual(addmm, mkldnn_y.float().to_dense(), prec=5e-02)
-   
     
     def test_baddbmm(self):
         for i in range(8, 14, 2):

@@ -220,15 +220,18 @@ class QLinearInt8 final : public torch::OperatorKernel {
   }
 
 #if AT_MKLDNN_ENABLED()
+
   Tensor mkldnn_linear(
       Tensor& input,
       Tensor& packed_weight,
       double output_scale,
       int64_t output_zero_point) {
-    TORCH_CHECK(input.dim() >= 2,
-        "mkldnn_linear: input needs to has dim at least 2, input dim ", input.dim());
     TORCH_CHECK(input.scalar_type() == ScalarType::QUInt8,
         "Only QUInt8 ScalarType activations are support")
+    TORCH_CHECK(input.dim() >= 2,
+        "mkldnn_linear: input needs to has dim at least 2, input dim ", input.dim());
+    TORCH_CHECK(packed_weight.dim() == 2,
+        "mkldnn_linear: weight needs to be in 2 dim, weight dim", packed_weight.dim());
 
     auto& pack_ptr =
         cpp_custom_type_hack::cast<PackedWeightQmkldnn>(
@@ -271,7 +274,7 @@ class QLinearInt8 final : public torch::OperatorKernel {
     input_.set_zero_point(std::vector<int32_t>(1, input_zero_point_int32));
 
     auto attr_ = ReluFused ? ideep::attr_t::fuse_relu()
-                           : ideep::attr_t();
+        : ideep::attr_t();
 
     Tensor output;
     ideep::tensor::dims outShape_in{M, N};
@@ -305,25 +308,29 @@ class QLinearInt8 final : public torch::OperatorKernel {
       bias_dims.push_back(N);
       ideep::tensor bias_(bias_dims, ideep::tensor::data_type::f32, bias_ptr);
       ideep::matmul_forward::compute(
-          input_,
-          weight_trans,
-          bias_,
-          output_,
-          1.0f, 1.0f, 1.0f,
-          ideep::scale_t(),
-          ideep::scale_t(),
-          output_scale_,
-          attr_); // TODO s8s8
+          /*src=*/input_,
+          /*weights=*/weight_trans,
+          /*bias=*/bias_,
+          /*dst=*/output_,
+          /*dst_coeff=*/1.0f, 
+          /*bias_coeff=*/1.0f, 
+          /*sum_coeff=*/1.0f,
+          /*src_scales=*/ideep::scale_t(),
+          /*weights_scales=*/ideep::scale_t(),
+          /*dst_scales=*/output_scale_,
+          /*attr=*/attr_); 
     } else {
       ideep::matmul_forward::compute(
-          input_,
-          weight_trans,
-          output_,
-          1.0f, 1.0f, 1.0f,
-          ideep::scale_t(),
-          ideep::scale_t(),
-          output_scale_,
-          attr_);
+          /*src=*/input_,
+          /*weights=*/weight_trans,
+          /*dst=*/output_,
+          /*dst_coeff=*/1.0f,
+          /*bias_coeff=*/1.0f,
+          /*sum_coeff=*/1.0f,
+          /*src_scales=*/ideep::scale_t(),
+          /*weights_scales=*/ideep::scale_t(),
+          /*dst_scales=*/output_scale_,
+          /*attr=*/attr_);
     }
     return output;
   }
