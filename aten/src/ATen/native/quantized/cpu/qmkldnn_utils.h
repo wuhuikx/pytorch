@@ -126,7 +126,8 @@ static std::tuple<at::Tensor, c10::optional<at::Tensor>> mkldnn_linear_unpack(
   int8_t* weight_ptr_int8 =
       reinterpret_cast<int8_t*>(weight_origin.data_ptr<c10::qint8>());
 
-  packB_mkldnn->to_public(weight_ptr_int8, false/*dequantize*/);
+  packB_mkldnn->to_public(weight_ptr_int8,
+                          /*dst_type=*/ideep::data_type::undef);
 
   return std::tuple<at::Tensor, c10::optional<at::Tensor>>(
       weight_origin, bias);
@@ -273,7 +274,9 @@ static std::tuple<at::Tensor, c10::optional<at::Tensor>> mkldnn_conv_unpack(
   int8_t* unpacked_weights_p =
       reinterpret_cast<int8_t*>(unpacked_weights.data_ptr<c10::qint8>());
 
-  auto pub_tensor = packB_mkldnn->to_public(unpacked_weights_p, /*scale_out*/false);
+  auto pub_tensor =
+      packB_mkldnn->to_public(unpacked_weights_p,
+                              /*dst_type=*/ideep::data_type::undef);
   unpacked_weights.as_strided_(packB_mkldnn->get_dims(), pub_tensor.get_strides());
   return std::tuple<at::Tensor, c10::optional<at::Tensor>>(
       unpacked_weights, bias);
