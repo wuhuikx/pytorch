@@ -56,6 +56,10 @@ Tensor mkldnn_linear(
   const ideep::tensor x = itensor_from_mkldnn(self_reshaped);
   const ideep::tensor w_trans = itensor_from_tensor(weight).transpose_(0, 1);
 
+  auto input_size = self.sizes();
+  std::vector<int64_t> output_size(input_size.begin(), input_size.end() - 1);
+  output_size.push_back(weight.size(0));
+  
   ideep::tensor y;
   if (bias.defined()) {
     ideep::tensor b = itensor_from_tensor(bias);
@@ -66,10 +70,6 @@ Tensor mkldnn_linear(
   } else {
     ideep::matmul_forward::compute(x, w_trans, y);
   }
-
-  auto input_size = self.sizes();
-  std::vector<int64_t> output_size(input_size.begin(), input_size.end() - 1);
-  output_size.push_back(weight.size(0));
   
   if (self.dim() > 2) {
     return new_with_itensor_mkldnn(std::move(y), self.options()).reshape(output_size);
