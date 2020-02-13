@@ -117,7 +117,7 @@ Tensor& bmm_out_mkldnn(
     const Tensor& batch1, 
     const Tensor& batch2) {
   const ideep::tensor x = itensor_from_mkldnn(batch1);
-  const ideep::tensor w = itensor_from_mkldnn(batch2);
+  const ideep::tensor w = itensor_from_tensor(batch2);
   ideep::tensor& y = itensor_from_mkldnn(result);
   ideep::matmul_forward::compute(x, w, y);
   return result;
@@ -158,8 +158,17 @@ Tensor& baddbmm_out_mkldnn(
     Scalar beta, 
     Scalar alpha) {
     const ideep::tensor x = itensor_from_mkldnn(batch1);
-    const ideep::tensor w = itensor_from_mkldnn(batch2);
-    const ideep::tensor bias = itensor_from_mkldnn(self);
+    const ideep::tensor w = itensor_from_tensor(batch2);
+    ideep::tensor bias = itensor_from_tensor(self);
+    if (bias.get_dims().size() < x.get_dims().size()) {
+      ideep::tensor::dims bias_dims = bias.get_dims();
+      bias_dims.insert(bias_dims.begin(), 1);
+      if (bias_dims.size() == 2) {
+        bias.set_desc({bias_dims, bias.get_data_type(), ideep::format_tag::ab});
+      } else {
+        bias.set_desc({bias_dims, bias.get_data_type(), ideep::format_tag::abc});
+      }
+    }
     ideep::tensor& y = itensor_from_mkldnn(result);
 
     float dst_coeff = alpha.to<float>();
@@ -187,7 +196,7 @@ Tensor& baddbmm__mkldnn(
     Scalar beta,
     Scalar alpha) {
     const ideep::tensor x = itensor_from_mkldnn(batch1);
-    const ideep::tensor w = itensor_from_mkldnn(batch2);
+    const ideep::tensor w = itensor_from_tensor(batch2);
     ideep::tensor y = itensor_from_mkldnn(self);
     float dst_coeff = alpha.to<float>();
     float bias_coeff = 1.0f;

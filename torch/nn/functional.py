@@ -1365,8 +1365,9 @@ def linear(input, weight, bias=None):
         - Bias: :math:`(out\_features)`
         - Output: :math:`(N, *, out\_features)`
     """
-
-    if input.dim() == 2 and bias is not None:
+    if (input.layout == torch._mkldnn):
+        ret = torch._C._nn.mkldnn_linear(input, weight, bias)
+    elif input.dim() == 2 and bias is not None:
         ret = torch.addmm(bias, input, weight.t())
     else:
         output = input.matmul(weight.t())

@@ -122,6 +122,7 @@ class TestMkldnn(TestCase):
                                          bias=bias,
                                          groups=groups).float()
                 mkldnn_conv2d = mkldnn_utils.to_mkldnn(copy.deepcopy(conv2d))
+                mkldnn_conv2d = copy.deepcopy(conv2d)
                 with torch.backends.mkldnn.flags(enabled=False):
                     y_aten = conv2d(x)
                 y_mkldnn = mkldnn_conv2d(x.to_mkldnn()).to_dense()
@@ -477,28 +478,26 @@ class TestMkldnn(TestCase):
         in_features = torch.randint(3, 10, (1,)).item()
         out_features = torch.randint(3, 100, (1,)).item()
         x = torch.randn(3, in_features, dtype=torch.float32) * 10
-
-        dtype = torch.bfloat16
         for bias in [True, False]:
             linear = torch.nn.Linear(in_features, out_features, bias=bias).float()
+            linear_res = linear(x)
 
             for dtype in [torch.bfloat16, torch.float]:
-                x_ = x.clone().to_mkldnn().to(dtype)
-                mkldnn_linear = mkldnn_utils.to_mkldnn(copy.deepcopy(linear)).to(dtype)
+                x_ = x.clone().to_mkldnn(dtype)
+                mkldnn_linear = copy.deepcopy(linear).to(dtype)
                 self.assertEqual(
                     linear(x),
                     mkldnn_linear(x_).float().to_dense(),
                     1e-1 if dtype == torch.bfloat16 else 1e-05)
                 if dtype == torch.float:
-                    self._test_serialization(mkldnn_linear, (x_,))
                     self._test_tracing(mkldnn_linear, (x_,))
-    
+  
     # we should first expose aten::linear, depend on https://github.com/pytorch/pytorch/pull/20039
     def test_linear_backward(self):
         in_features = torch.randint(3, 10, (1,)).item()
         out_features = torch.randint(3, 100, (1,)).item()
         x = torch.randn(3, in_features, dtype=torch.float32) * 10
-        for bias in [True]:
+        for bias in [True, False]:
             x1 = x.clone().requires_grad_()
             x2 = x.clone().to_mkldnn().requires_grad_()
             linear = torch.nn.Linear(in_features, out_features).float()
